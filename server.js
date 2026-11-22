@@ -51,7 +51,6 @@ const HIT_INVULN = 1100;
 const DASH_MS = 170, DASH_COOLDOWN = 1100;
 const NOTE_COOLDOWN = 4000, NOTE_STUN = 1100;
 const SPECIAL_COOLDOWN = 12000;
-const LAST_STAGE = 4;
 const SHOP_ITEMS = {
   heal:  { cost: 40, max: 99 },
   hp:    { cost: 60, max: 2 },
@@ -82,6 +81,30 @@ const roomLayouts = [
   { name: "Dragon of Debt", mobs: ["boss"], hearts: [[300, 460], [500, 460]], chests: [] }
 ];
 const SPAWNS = [[90, 260], [145, 260]];
+/* ---- story mode: Emberfall village (hub) and four regions that unlock in order ---- */
+const HUB_LAYOUT = { name: "Emberfall Village", mobs: [], hearts: [], chests: [], theme: 5, track: 5 };
+const HUB_SPAWNS = [[360, 440], [440, 440]];
+const keepLayouts = roomLayouts.map((l, i) => Object.assign({}, l, { theme: i, track: i, tier: i }));
+keepLayouts[4].name = "Dragon of Debt";
+const REGIONS = {
+  greenwood: { name: "Greenwood", gx: 120, req: [], layouts: [
+    { name: "Mossy Path", mobs: ["slime", "slime", "slime", "bat"], hearts: [[330, 450]], chests: [[700, 100], [120, 470]], theme: 6, track: 0, tier: 0 },
+    { name: "Hollow Oak", mobs: ["slime", "bat", "bat", "archer", "skeleton"], keeper: 4, hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]], theme: 6, track: 0, tier: 1 },
+    { name: "Thorn Warden's Grove", mobs: ["brute", "slime", "slime", "bat"], elite: 0, eliteName: "Thorn Warden", keeper: 1, hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470]], theme: 6, track: 0, tier: 1 }] },
+  mire: { name: "Sunken Mire", gx: 280, req: ["greenwood"], layouts: [
+    { name: "Bog Crossing", mobs: ["slime", "slime", "hexer", "bat"], hearts: [[330, 450]], chests: [[700, 100], [120, 470]], theme: 7, track: 1, tier: 1 },
+    { name: "Mushroom Hollow", mobs: ["hexer", "bomber", "slime", "skeleton", "bat"], keeper: 3, shield: [3], hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]], theme: 7, track: 1, tier: 1 },
+    { name: "The Mire Mother's Pool", mobs: ["brute", "hexer", "hexer", "bomber"], elite: 0, eliteName: "Mire Mother", keeper: 1, hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470]], theme: 7, track: 1, tier: 2 }] },
+  coast: { name: "Shattered Coast", gx: 440, req: ["mire"], layouts: [
+    { name: "Wreck Beach", mobs: ["skeleton", "skeleton", "archer", "bomber"], shield: [0], hearts: [[330, 450]], chests: [[700, 100], [120, 470]], theme: 8, track: 2, tier: 1 },
+    { name: "Cliffside Battery", mobs: ["archer", "archer", "hexer", "skeleton", "bomber"], keeper: 3, shield: [3], hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]], theme: 8, track: 2, tier: 2 },
+    { name: "Tidebreaker's Cove", mobs: ["brute", "skeleton", "archer", "bomber", "hexer"], elite: 0, eliteName: "Tidebreaker", keeper: 2, shield: [1], hearts: [[400, 440]], chests: [[60, 90], [740, 90], [60, 470], [740, 470]], theme: 8, track: 2, tier: 2 }] },
+  keep: { name: "The Keep of Debt", gx: 650, req: ["greenwood", "mire", "coast"], layouts: keepLayouts }
+};
+const REGION_IDS = Object.keys(REGIONS);
+const unlocked = (room, id) => REGIONS[id].req.every(r => room.story.done.has(r));
+const LAY = room => (room.layouts || roomLayouts)[room.stage];
+const lastOf = room => (room.layouts || roomLayouts).length - 1;
 const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -94,13 +117,14 @@ const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 function makeCode() { let c = ""; for (let i = 0; i < 6; i++) c += CODE_CHARS[crypto.randomInt(CODE_CHARS.length)]; return c; }
 
 /* ------------------------------------------------------------------ rooms */
-function makeRoom(code, daily, diff) {
+function makeRoom(code, daily, diff, story) {
   const seed = daily ? parseInt(dailyKey().replace(/-/g, ""), 10) : 0;
   return {
     code, players: {}, stage: 0, key: false, keyDrop: null, finished: false, gameOver: false,
     started: false, doorWas: false, enemies: [], pickups: [], chests: [], shots: [], gold: 0,
     shop: null, daily: daily ? dailyKey() : null, rng: daily ? mulberry(seed) : null,
     runStart: 0, runEnd: 0, result: null, lockedNoticed: false,
+    story: story || null, scene: story ? "hub" : "dungeon", region: null, layouts: story ? [HUB_LAYOUT] : null, gate: null, lockMsgAt: 0,
     diff: "normal", paused: false, pausedAt: 0, pausedBy: "", rematch: new Set(), retry: new Set(), retries: 0, cpGold: 0
   };
 }
@@ -115,7 +139,7 @@ function newEnemy(room, kind, x, y, extra = {}) {
   }, extra);
 }
 function makeEnemies(stage, graceMs, room) {
-  const layout = roomLayouts[stage], now = Date.now();
+  const layout = (room.layouts || roomLayouts)[stage], now = Date.now();
   if (layout.mobs[0] === "boss") return [newEnemy(room, "boss", 600, 240, { activeAt: now + graceMs + 800 })];
   return layout.mobs.map((kind, i) => newEnemy(room, kind, 430 + (i % 2) * 105, 115 + Math.floor(i / 2) * 155,
     { keeper: layout.keeper === i, elite: layout.elite === i, shield: !!(layout.shield && layout.shield.includes(i)), activeAt: now + graceMs }));
@@ -123,12 +147,12 @@ function makeEnemies(stage, graceMs, room) {
 function initStage(room) {
   room.enemies = makeEnemies(room.stage, 1600, room);
   room.shots = [];
-  const layout = roomLayouts[room.stage];
+  const layout = LAY(room);
   room.pickups = layout.hearts.map(([x, y], i) => ({ id: `h${room.stage}-${i}`, x, y }));
   room.chests = layout.chests.map(([x, y], i) => ({ id: `c${room.stage}-${i}`, x, y, open: false, mimic: !!layout.mimics && rand(room) < layout.mimics }));
   room.keyDrop = null; room.doorWas = false; room.lockedNoticed = false;
   Object.values(room.players).forEach(p => {
-    const s = SPAWNS[p.slot] || SPAWNS[0];
+    const s = (room.scene === "hub" ? HUB_SPAWNS : SPAWNS)[p.slot] || SPAWNS[0];
     p.x = s[0]; p.y = s[1]; p.attackUntil = 0; p.dashUntil = 0; p.noteUntil = 0;
     p.input = { up: false, down: false, left: false, right: false };
   });
@@ -163,7 +187,8 @@ function gearStats(p) {
   return t;
 }
 function rollItem(room, minRarity = 0) {
-  const w = room.stage >= 3 ? [2, 4, 4] : room.stage >= 1 ? [5, 4, 1] : [7, 3, 0.4];
+  const tier = LAY(room).tier !== undefined ? LAY(room).tier : room.stage;
+  const w = tier >= 3 ? [2, 4, 4] : tier >= 1 ? [5, 4, 1] : [7, 3, 0.4];
   let pool = ITEM_IDS.filter(id => ITEMS[id].rarity >= minRarity);
   const weights = pool.map(id => w[ITEMS[id].rarity]); const tot = weights.reduce((a, b) => a + b, 0);
   let r = rand(room) * tot; for (let i = 0; i < pool.length; i++) { r -= weights[i]; if (r <= 0) return pool[i]; }
@@ -186,7 +211,9 @@ function publicState(room) {
   return {
     code: room.code, stage: room.stage, key: room.key, finished: room.finished, gameOver: room.gameOver,
     waiting: !room.started, daily: room.daily, diff: room.diff, paused: room.paused, pausedBy: room.pausedBy,
-    retry: room.retry.size, canRetry: room.gameOver && !room.finished && room.stage > 0, rematch: room.rematch.size, needRematch: Object.keys(room.players).length, lastStage: LAST_STAGE, roomName: roomLayouts[room.stage].name,
+    retry: room.retry.size, canRetry: room.gameOver && !room.finished && (room.stage > 0 || !!room.story) && room.scene !== "hub", rematch: room.rematch.size, needRematch: Object.keys(room.players).length, lastStage: lastOf(room), stageTotal: lastOf(room) + 1, roomName: LAY(room).name,
+    scene: room.scene, region: room.region, theme: LAY(room).theme !== undefined ? LAY(room).theme : room.stage, track: LAY(room).track !== undefined ? LAY(room).track : room.stage,
+    story: room.story ? { done: [...room.story.done] } : null, gate: room.gate, eliteName: LAY(room).eliteName || null,
     keyDrop: room.keyDrop,
     players: Object.values(room.players).map(p => ({
       id: p.id, name: p.name, slot: p.slot, cls: p.cls, x: p.x, y: p.y, hp: p.hp, cap: cap(p), alive: p.alive,
@@ -206,7 +233,7 @@ function publicState(room) {
     shots: room.shots.map(s => ({ x: Math.round(s.x), y: Math.round(s.y), a: Math.atan2(s.vy, s.vx), k: s.kind })),
     pickups: room.pickups, chests: room.chests.map(c => ({ id: c.id, x: c.x, y: c.y, open: c.open })), gold: room.gold,
     enemyCount: room.enemies.filter(alive).length,
-    doorOpen: cleared && (room.stage === 0 || room.key),
+    doorOpen: room.scene !== "hub" && cleared && (room.stage === 0 || room.key),
     shop: room.shop ? { ready: [...room.shop.ready], left: Math.max(0, Math.ceil((room.shop.until - now) / 1000)) } : null,
     result: room.result
   };
@@ -222,6 +249,7 @@ function shiftTimers(room, d) {
   if (room.runStart) room.runStart += d;
 }
 function resetRoom(room) {
+  if (room.story) return toHub(room);
   room.stage = 0; room.gold = 0; room.key = false; room.keyDrop = null; room.finished = false; room.gameOver = false;
   room.shop = null; room.result = null; room.runStart = Date.now(); room.runEnd = 0; room.paused = false; room.rematch.clear(); room.retry.clear(); room.retries = 0; room.cpGold = 0;
   if (room.daily) room.rng = mulberry(parseInt(room.daily.replace(/-/g, ""), 10));
@@ -229,6 +257,47 @@ function resetRoom(room) {
     p.hp = DIFFS[room.diff].start; p.alive = true; p.reviveT = 0; p.lastHit = 0; p.up = {}; p.stats = newStats(); p.inv = []; p.equip = { weapon: null, head: null, trinket: null };
   });
   initStage(room);
+}
+
+/* ---- story mode: hub, regions, ending ---- */
+function toHub(room, clearedId) {
+  room.scene = "hub"; room.region = null; room.layouts = [HUB_LAYOUT]; room.stage = 0; room.key = false; room.keyDrop = null; room.shop = null;
+  room.finished = false; room.gameOver = false; room.result = null; room.paused = false; room.rematch.clear(); room.retry.clear(); room.gate = null;
+  Object.values(room.players).forEach(p => { p.hp = cap(p); p.alive = true; p.reviveT = 0; p.lastHit = 0; p.gateT = 0; });
+  initStage(room);
+  if (clearedId) fx(room, "regionclear", { id: clearedId });
+  fx(room, "stage", { stage: 0 });
+  notice(room, clearedId ? `${REGIONS[clearedId].name} cleared! Back in Emberfall. Hearts restored.` : "Back in Emberfall. Hearts restored. Walk into a gate to travel.");
+}
+function enterRegion(room, id) {
+  room.scene = "dungeon"; room.region = id; room.layouts = REGIONS[id].layouts; room.stage = 0; room.key = false; room.keyDrop = null; room.gate = null;
+  Object.values(room.players).forEach(p => { p.gateT = 0; });
+  initStage(room); room.cpGold = room.gold; room.regionStart = Date.now(); room.enemies.forEach(e => { e.activeAt = Date.now() + 1800; });
+  bump(stats, "storyTrips");
+  fx(room, "stage", { stage: 0 });
+  notice(room, `${REGIONS[id].name}: ${LAY(room).name}`);
+}
+function finishStory(room) {
+  room.finished = true; room.runEnd = Date.now(); bump(stats, "storyClears");
+  const ps = Object.values(room.players), time = Math.round((room.runEnd - (room.regionStart || room.runEnd)) / 1000);
+  room.result = { story: true, time, score: 0, gold: room.gold, kills: ps.reduce((a, p) => a + p.stats.kills, 0), downs: ps.reduce((a, p) => a + p.stats.downs, 0),
+    diff: DIFFS[room.diff].label, retries: room.retries, players: ps.map(p => ({ name: p.name, cls: p.cls, ...p.stats })), top: [] };
+  fx(room, "win"); notice(room, "The Dragon of Debt is no more. Emberfall is free!");
+}
+function hubTick(room, all, alive, now, dt) {
+  // every living hero must stand in the same gate for a moment to travel
+  let gid = null;
+  for (const id of REGION_IDS) { const g = REGIONS[id]; if (alive.every(p => Math.abs(p.x - g.gx) < 62 && p.y < 112)) { gid = id; break; } }
+  alive.forEach(p => { p.gateT = gid ? (p.gateT || 0) + dt : 0; });
+  if (!gid) { room.gate = null; return; }
+  const t = Math.min(...alive.map(p => p.gateT || 0));
+  if (!unlocked(room, gid)) {
+    room.gate = { id: gid, p: 0, locked: true };
+    if (now - room.lockMsgAt > 3500) { room.lockMsgAt = now; const need = REGIONS[gid].req.filter(r => !room.story.done.has(r)).map(r => REGIONS[r].name); notice(room, `${REGIONS[gid].name} is sealed. Clear ${need.join(" and ")} first.`); }
+    return;
+  }
+  room.gate = { id: gid, p: Math.min(1, t / 1.1), locked: false };
+  if (t >= 1.1) enterRegion(room, gid);
 }
 
 // Retry from the start of the current room: hearts refilled, gold back to what it was on entry, gear kept. Retried runs are not ranked.
@@ -259,10 +328,11 @@ function finishRun(room) {
 /* ------------------------------------------------------------------ sockets */
 io.on("connection", socket => {
   const cleanCls = c => (c === "knight" ? "knight" : "bard");
-  socket.on("createRoom", ({ name, cls, daily, diff } = {}, cb = () => {}) => {
+  socket.on("createRoom", ({ name, cls, daily, diff, story, world } = {}, cb = () => {}) => {
     let code;
     do { code = makeCode(); } while (rooms.has(code));
-    const room = makeRoom(code, !!daily);
+    const wantStory = !!story && !daily;
+    const room = makeRoom(code, !!daily, null, wantStory ? { done: new Set((Array.isArray(world && world.done) ? world.done : []).filter(id => REGIONS[id] && id !== "keep")) } : null);
     room.diff = cleanDiff(diff);
     rooms.set(code, room);
     joinRoom(socket, room, name, cls, cb);
@@ -451,7 +521,7 @@ io.on("connection", socket => {
   socket.on("buy", item => {
     const room = rooms.get(socket.data.roomCode); const p = room?.players[socket.id];
     const def = SHOP_ITEMS[item];
-    if (!room || !p || !room.shop || !def) return;
+    if (!room || !p || !(room.shop || room.scene === "hub") || !def) return;
     if (item !== "heal" && (p.up[item] || 0) >= def.max) return;
     if (room.gold < def.cost) return;
     room.gold -= def.cost;
@@ -472,7 +542,7 @@ io.on("connection", socket => {
   // Rematch: when every hero in the room asks, restart the run with the same team and difficulty.
   socket.on("retry", () => {
     const room = rooms.get(socket.data.roomCode);
-    if (!room || !room.players[socket.id] || !room.gameOver || room.finished || room.stage < 1) return;
+    if (!room || !room.players[socket.id] || !room.gameOver || room.finished || (room.stage < 1 && !room.story)) return;
     room.retry.add(socket.id);
     if (Object.keys(room.players).every(id => room.retry.has(id))) { retryRoom(room); fx(room, "stage", { stage: room.stage }); notice(room, "Retrying this room. This run will no longer be ranked."); }
     else notice(room, "Waiting for your teammate to press RETRY ROOM.");
@@ -488,6 +558,7 @@ io.on("connection", socket => {
     const room = rooms.get(socket.data.roomCode);
     if (!room || !room.players[socket.id] || !(room.finished || room.gameOver)) return;
     room.rematch.add(socket.id);
+    if (room.story && Object.keys(room.players).every(id => room.rematch.has(id))) { toHub(room); return broadcast(room); }
     if (Object.keys(room.players).every(id => room.rematch.has(id))) {
       resetRoom(room); startRun(room, 2200);
       fx(room, "stage", { stage: 0 });
@@ -538,7 +609,7 @@ function killEnemy(room, e, p) {
   room.gold += defOf(e).gold;
   fx(room, "kill", { x: e.x, y: e.y, kind: e.kind });
   if (e.kind === "mimic" && p) giveItem(room, p, rollItem(room, 1), e);
-  if (e.elite) { Object.values(room.players).forEach(pl => giveItem(room, pl, rollItem(room, 1), e)); shake(room); notice(room, "The Iron Warden falls! Gear for everyone."); }
+  if (e.elite) { Object.values(room.players).forEach(pl => giveItem(room, pl, rollItem(room, 1), e)); shake(room); notice(room, `The ${LAY(room).eliteName || "Iron Warden"} falls! Gear for everyone.`); }
   if (e.kind === "boss") { Object.values(room.players).forEach(pl => giveItem(room, pl, rollItem(room, 2), e)); shake(room); room.shots = []; room.enemies.forEach(m => { if (m.alive) { m.alive = false; fx(room, "kill", { x: m.x, y: m.y, kind: m.kind }); } }); notice(room, "The Dragon of Debt is defeated! Reach the exit!"); return; }
   if (e.keeper && !room.key) {
     room.keyDrop = { x: clamp(e.x, 60, ROOM_W - 90), y: clamp(e.y, 80, ROOM_H - 60) };
@@ -581,14 +652,14 @@ function tick() {
       if (everyone || now > room.shop.until) {
         room.shop = null; room.stage++; initStage(room); room.cpGold = room.gold;
         fx(room, "stage", { stage: room.stage });
-        notice(room, `Room ${room.stage + 1}: ${roomLayouts[room.stage].name}` + (roomLayouts[room.stage].elite !== undefined ? ". The Iron Warden guards this room!" : ""));
+        notice(room, `Room ${room.stage + 1}: ${LAY(room).name}` + (LAY(room).elite !== undefined ? `. The ${LAY(room).eliteName || "Iron Warden"} guards this room!` : ""));
         room.enemies.forEach(e => { e.activeAt = Date.now() + 1800; });
       }
       broadcast(room); continue;
     }
 
     let alive = all.filter(p => p.alive);
-    if (alive.length === 0) { room.gameOver = true; bump(stats.wipes, roomLayouts[room.stage].name); if (room.lastHitBy) bump(stats.killers, room.lastHitBy); fx(room, "gameover"); broadcast(room); continue; }
+    if (alive.length === 0) { room.gameOver = true; bump(stats.wipes, LAY(room).name); if (room.lastHitBy) bump(stats.killers, room.lastHitBy); fx(room, "gameover"); broadcast(room); continue; }
 
     for (const p of alive) {
       const dashing = now < p.dashUntil;
@@ -707,7 +778,9 @@ function tick() {
       }
     }
     alive = all.filter(p => p.alive);
-    if (alive.length === 0) { room.gameOver = true; bump(stats.wipes, roomLayouts[room.stage].name); if (room.lastHitBy) bump(stats.killers, room.lastHitBy); fx(room, "gameover"); broadcast(room); continue; }
+    if (alive.length === 0) { room.gameOver = true; bump(stats.wipes, LAY(room).name); if (room.lastHitBy) bump(stats.killers, room.lastHitBy); fx(room, "gameover"); broadcast(room); continue; }
+
+    if (room.scene === "hub") { hubTick(room, all, alive, now, dt); broadcast(room); continue; }
 
     room.pickups = room.pickups.filter(pk => {
       const taker = alive.find(p => p.hp < cap(p) && Math.hypot(p.x - pk.x, p.y - pk.y) < 40);
@@ -736,13 +809,14 @@ function tick() {
     if (doorOpen) {
       const nearExit = alive.every(p => p.x > 700 && Math.abs(p.y - 260) < 90);
       if (nearExit) {
-        if (room.stage < LAST_STAGE) {
+        if (room.stage < lastOf(room)) {
           // Open the shop. Fallen heroes get back up with 2 hearts.
           all.forEach(p => { if (!p.alive) { p.alive = true; p.hp = 2; p.reviveT = 0; } p.input = { up: false, down: false, left: false, right: false }; });
           room.shop = { ready: new Set(), until: now + SHOP_TIME };
           fx(room, "shopopen");
           notice(room, "Rest stop! Spend your gold, then press READY.");
-        } else finishRun(room);
+        } else if (room.story) { room.story.done.add(room.region); if (room.region === "keep") finishStory(room); else toHub(room, room.region); }
+        else finishRun(room);
       }
     }
     broadcast(room);
@@ -753,5 +827,5 @@ setInterval(tick, 50);
 if (require.main === module) {
   server.listen(PORT, () => console.log(`Riff & Shield listening on ${PORT}`));
 } else {
-  module.exports = { retryRoom, server, io, rooms, MOB, MAX_HP, roomLayouts, initStage, startRun, ITEMS, giveItem, killEnemy, resetRoom, DIFFS };   // for automated tests
+  module.exports = { retryRoom, server, io, rooms, MOB, MAX_HP, roomLayouts, REGIONS, toHub, enterRegion, initStage, startRun, ITEMS, giveItem, killEnemy, resetRoom, DIFFS };   // for automated tests
 }

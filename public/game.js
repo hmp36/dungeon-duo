@@ -100,7 +100,7 @@ const DIFF_DESC = { easy: "7 hearts to start, monsters have about 30% less healt
 function pickDiff(d) { myDiff = d; document.querySelectorAll(".dbtn").forEach(b => b.classList.toggle("on", b.dataset.d === d)); $("diffDesc").textContent = DIFF_DESC[d]; }
 document.querySelectorAll(".dbtn").forEach(b => b.onclick = () => pickDiff(b.dataset.d));
 pickDiff("normal");
-$("createBtn").onclick = () => { audio(); socket.emit("createRoom", { name: $("playerName").value.trim() || "Hero", cls: myCls, daily: $("dailyChk").checked, diff: myDiff }, enterRoom); };
+$("createBtn").onclick = () => { audio(); socket.emit("createRoom", { name: $("playerName").value.trim() || "Hero", cls: myCls, daily: $("dailyChk").checked, diff: myDiff, story: $("storyChk").checked && !$("dailyChk").checked, world: typeof loadWorld === "function" ? loadWorld() : null }, enterRoom); };
 function loadBoard() {
   Promise.all([fetch("/api/leaderboard?daily=1").then(r => r.json()), fetch("/api/leaderboard").then(r => r.json())]).then(([d, a]) => {
     const list = (title, arr) => `<h3>${title}</h3>` + (arr.length ? "<ol>" + arr.slice(0, 5).map(b => `<li>${b.names} — ${b.score} pts (${b.time}s)</li>`).join("") + "</ol>" : '<div class="empty">No runs yet. Be the first!</div>');
@@ -137,18 +137,21 @@ socket.on("disconnect", () => setNetUi(false));
 socket.on("connect_error", () => setNetUi(false));
 socket.on("notice", msg => $("status").textContent = msg);
 
-let lastStage = -1, windSeen = new Set(), lastWindSfx = 0;
+let lastStage = "", windSeen = new Set(), lastWindSfx = 0;
 socket.on("state", s => {
   // monsters that just started winding up get an audible warning
   s.enemies.forEach(e => {
     if (e.winding && !windSeen.has(e.id)) { windSeen.add(e.id); if (performance.now() - lastWindSfx > 160) { sfx.windup(); lastWindSfx = performance.now(); } }
     if (!e.winding) windSeen.delete(e.id);
   });
-  if (s.stage !== lastStage) {
-    lastStage = s.stage; rp.clear(); splats.length = 0;
-    banner = { text: `ROOM ${s.stage + 1}`, sub: roomNames[s.stage].toUpperCase(), start: vnow(), until: vnow() + 2600 };
+  const stageKey = s.scene + "|" + s.region + "|" + s.stage;
+  if (stageKey !== lastStage) {
+    lastStage = stageKey; rp.clear(); splats.length = 0;
+    banner = s.story ? (s.scene === "hub" ? { text: "EMBERFALL", sub: "VILLAGE", start: vnow(), until: vnow() + 2600 } : { text: (REGIONS_C.find(r => r.id === s.region) || { name: "" }).name.toUpperCase(), sub: `${s.stage + 1}/${s.stageTotal}: ${s.roomName.toUpperCase()}`, start: vnow(), until: vnow() + 2600 })
+      : { text: `ROOM ${s.stage + 1}`, sub: s.roomName.toUpperCase(), start: vnow(), until: vnow() + 2600 };
   }
-  state = s; updateHud(); checkOverlay(); updateShop(); renderGear(); setTrack(s.stage, s.waiting);
+  state = s; updateHud(); checkOverlay(); updateShop(); renderGear(); setTrack(s.track !== undefined ? s.track : s.stage, s.waiting);
+  if (typeof storyOnState === "function") storyOnState(s);
 });
 socket.on("fx", handleFx);
 
@@ -157,13 +160,14 @@ function updateHud() {
   if (!state) return;
   const meP = state.players.find(p => p.id === myId);
   if (meP && meP.cls !== lastCls) { lastCls = meP.cls; $("noteBtn").textContent = meP.cls === "knight" ? "BASH" : "RIFF"; $("spBtn").textContent = meP.cls === "knight" ? "GUARD" : "HEAL"; }
-  $("roomLabel").textContent = `${state.stage + 1} / 5 — ${roomNames[state.stage]}`;
+  $("roomLabel").textContent = `${state.stage + 1} / ${state.stageTotal || 5} — ${state.roomName}`;
   const ps = state.players;
   $("healthLabel").textContent = ps.map(p => `${p.name}: ${"❤️".repeat(p.hp)}${"🖤".repeat(Math.max(0, p.cap - p.hp))}${p.alive ? "" : " DOWN"}`).join("　");
   $("enemyLabel").textContent = `${state.enemyCount} remaining`;
   $("keyLabel").textContent = state.key ? "🗝️ Carried" : state.keyDrop ? "✨ On the floor!" : "🔒 Not found";
   $("goldLabel").textContent = "🪙 " + (state.gold || 0);
   $("soloBtn").classList.toggle("hidden", !state.waiting);
+  if (typeof storyHud === "function") storyHud();
 }
 function checkOverlay() {
   if (!state) return;
@@ -190,6 +194,7 @@ function checkOverlay() {
   const pv = $("pauseOv");
   if (state.paused && !ended) { $("pauseText").textContent = `${state.pausedBy || "A hero"} paused the game. Press P or RESUME to continue.`; pv.classList.remove("hidden"); } else pv.classList.add("hidden");
   $("pauseBtn").textContent = state.paused ? "RESUME (P)" : "PAUSE (P)";
+  if (typeof storyOverlay === "function") storyOverlay(ended);
 }
 
 /* ------------------------------------------------------------------ gear */
@@ -226,6 +231,7 @@ const SHOP = [
 let shopSig = "";
 function updateShop() {
   const el = $("shop");
+  if (typeof hubShopOpen !== "undefined" && hubShopOpen && state && state.scene === "hub" && !state.shop) return hubShopRender(el);
   if (!state || !state.shop) { el.classList.add("hidden"); shopSig = ""; return; }
   const me = state.players.find(p => p.id === myId), ready = state.shop.ready.includes(myId);
   const sig = [state.gold, ready, state.shop.ready.length, state.shop.left, JSON.stringify(me && me.up)].join("|");
@@ -238,7 +244,7 @@ function updateShop() {
 }
 $("shop").addEventListener("pointerdown", e => {
   const b = e.target.closest("button"); if (!b || b.disabled) return;
-  if (b.dataset.buy) socket.emit("buy", b.dataset.buy); else if (b.dataset.ready) socket.emit("ready");
+  if (b.dataset.buy) socket.emit("buy", b.dataset.buy); else if (b.dataset.ready) socket.emit("ready"); else if (b.dataset.close && typeof closeHubShop === "function") closeHubShop();
 });
 
 /* ------------------------------------------------------------------ music: metal-style engine
@@ -357,7 +363,10 @@ function doDash() { socket.emit("dash"); }
 window.addEventListener("keydown", e => {
   const k = e.key.toLowerCase();
   if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault();
-  if (k === " ") { if (!e.repeat) socket.emit("attack"); return; }
+  if (typeof dlgActive !== "undefined" && dlgActive && (k === " " || k === "enter")) { if (!e.repeat) dlgNext(); return; }
+  if (k === "escape" && typeof storyEsc === "function" && storyEsc()) return;
+  if (k === "m" && !e.repeat && typeof toggleMap === "function" && !(e.target && e.target.tagName === "INPUT")) { toggleMap(); return; }
+  if (k === " ") { if (!e.repeat && !(typeof hubInteract === "function" && hubInteract())) socket.emit("attack"); return; }
   if (k === "shift" || k === "e") { if (!e.repeat) doDash(); return; }
   if (k === "q" || k === "f") { if (!e.repeat) socket.emit("note"); return; }
   if (k === "g" && !e.repeat && fsOk) { toggleFs(); return; }
@@ -388,7 +397,7 @@ document.querySelectorAll("#touchPad [data-key]").forEach(b => {
 (() => {
   const atk = $("atkBtn"); let timer = null;
   const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
-  atk.addEventListener("pointerdown", e => { e.preventDefault(); socket.emit("attack"); stop(); timer = setInterval(() => socket.emit("attack"), 490); });
+  atk.addEventListener("pointerdown", e => { e.preventDefault(); if (typeof dlgActive !== "undefined" && dlgActive) { dlgNext(); return; } if (typeof hubInteract === "function" && hubInteract()) return; socket.emit("attack"); stop(); timer = setInterval(() => socket.emit("attack"), 490); });
   ["pointerup", "pointercancel", "pointerleave"].forEach(t => atk.addEventListener(t, stop));
   atk.addEventListener("contextmenu", e => e.preventDefault());
   const nb = $("noteBtn"); nb.addEventListener("pointerdown", e => { e.preventDefault(); socket.emit("note"); }); nb.addEventListener("contextmenu", e => e.preventDefault());
@@ -466,7 +475,7 @@ const THEMES = [
   { floorA: "#3b3428", floorB: "#362f24", line: "#4d4333", speck: "#5c4f38", wall: "#85734a", wallDark: "#5a4c30", ambient: 0.44, torch: "#ffd86b", glow: "255,210,100" },
   { floorA: "#3a2323", floorB: "#321e1e", line: "#4f2c2c", speck: "#6a3a30", wall: "#6b3b36", wallDark: "#3d201e", ambient: 0.58, torch: "#ff6a3c", glow: "255,100,50" }
 ];
-const TORCHES = [90, 400, 690];
+const TORCHES = [90, 400, 690], torchXs = () => (state && state.theme >= 5 ? [] : TORCHES);
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 function bricks(g, x, y, w, h, th) {
   g.fillStyle = th.wallDark; g.fillRect(x, y, w, h);
@@ -492,6 +501,7 @@ function coins(g, x, y, rng) { for (let i = 0; i < 9; i++) { g.fillStyle = rng()
 function skull(g, x, y) { g.fillStyle = "#cfc8b4"; g.fillRect(x - 5, y - 5, 10, 9); g.fillRect(x - 3, y + 3, 6, 3); g.fillStyle = "#222"; g.fillRect(x - 3, y - 2, 2, 3); g.fillRect(x + 1, y - 2, 2, 3); }
 function bone(g, x, y, a) { g.save(); g.translate(x, y); g.rotate(a); g.fillStyle = "#cfc8b4"; g.fillRect(-9, -1.5, 18, 3); g.fillRect(-11, -3, 4, 6); g.fillRect(7, -3, 4, 6); g.restore(); }
 function buildBg(stage) {
+  if (stage >= 5 && typeof buildOutdoorBg === "function") return buildOutdoorBg(stage);
   const c = document.createElement("canvas"); c.width = W * DPR; c.height = H * DPR;
   const g = c.getContext("2d"); g.scale(DPR, DPR); const th = THEMES[stage], rng = mulberry(stage * 7919 + 13);
   for (let y = 0; y < H; y += 40) for (let x = 0; x < W; x += 40) {
@@ -1065,7 +1075,7 @@ function drawEnemy(e, r, t, faceX) {
   if ((e.hp < e.maxHp || e.kind === "brute") && e.kind !== "boss") {
     const bw = e.elite ? 72 : e.kind === "brute" ? 44 : 30, by = y - top - (e.keeper ? 22 : 8);
     px(x - bw / 2 - 1, by - 1, bw + 2, 6, "#0c0e14"); px(x - bw / 2, by, bw, 4, "#3a1f26"); px(x - bw / 2, by, bw * Math.max(0, e.hp / e.maxHp), 4, e.elite ? "#f0c24a" : "#e66c75");
-    if (e.elite) { ctx.fillStyle = "#ffe08a"; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "center"; ctx.fillText("IRON WARDEN", x, by - 5); }
+    if (e.elite) { ctx.fillStyle = "#ffe08a"; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "center"; ctx.fillText(((state && state.eliteName) || "Iron Warden").toUpperCase(), x, by - 5); }
   }
   if (e.stunned && !e.dormant) { for (let i = 0; i < 3; i++) { const a = t * 0.008 + i * 2.09; ctx.fillStyle = "#ffe08a"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center"; ctx.fillText("★", x + Math.cos(a) * 16, y - top - 6 + Math.sin(a) * 4); } }
   if (e.winding && (e.kind === "archer" || e.kind === "hexer") && state) { const tg = state.players.filter(p => p.alive).sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y))[0]; if (tg) { ctx.save(); ctx.strokeStyle = e.kind === "hexer" ? "rgba(190,130,255,.6)" : "rgba(255,90,90,.55)"; ctx.lineWidth = 2; ctx.setLineDash([8, 6]); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(tg.x, tg.y); ctx.stroke(); ctx.restore(); } }
@@ -1149,13 +1159,14 @@ requestAnimationFrame(draw);
 }
 function render(t) {
   const dt = Math.min(50, t - (lastTs || t)); lastTs = t; frame++;
-  const stage = state ? state.stage : 0, th = THEMES[stage];
+  const stage = state ? (state.theme !== undefined ? state.theme : state.stage) : 0, th = THEMES[stage];
   ctx.save(); ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   if (shake > 0.3) { ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake); shake *= 0.86; } else shake = 0;
   ctx.clearRect(0, 0, W, H);
   ctx.drawImage(bg(stage), 0, 0, W, H);
-  drawDoor(t);
-  TORCHES.forEach((x, i) => {                                                        // torches
+  if (!(state && state.scene === "hub")) drawDoor(t);
+  if (typeof drawHub === "function") drawHub(t);
+  torchXs().forEach((x, i) => {                                                        // torches
     const fl = Math.sin(t * 0.013 + i * 2) * 2 + Math.sin(t * 0.031 + i) * 1.5;
     rr(x, 34, 7, 20, 2, "#70513a"); rr(x - 3, 32, 13, 5, 2, "#3a2c20");
     { const fg = ctx.createRadialGradient(x + 3.5, 30, 1, x + 3.5, 30, 13); fg.addColorStop(0, "#fff6c8"); fg.addColorStop(0.4, th.torch); fg.addColorStop(1, "rgba(255,120,30,0)"); ctx.fillStyle = fg; ctx.beginPath(); ctx.moveTo(x + 3.5, 14 + fl); ctx.quadraticCurveTo(x + 14, 30, x + 3.5, 38); ctx.quadraticCurveTo(x - 7, 30, x + 3.5, 14 + fl); ctx.fill(); }
@@ -1214,7 +1225,7 @@ function render(t) {
   dctx.globalCompositeOperation = "source-over"; dctx.clearRect(0, 0, W, H);
   dctx.fillStyle = `rgba(4,6,12,${th.ambient})`; dctx.fillRect(0, 0, W, H);
   dctx.globalCompositeOperation = "destination-out";
-  TORCHES.forEach((x, i) => light(dctx, x + 3, 40, 150 + Math.sin(t * 0.013 + i * 2) * 8, 0.95));
+  torchXs().forEach((x, i) => light(dctx, x + 3, 40, 150 + Math.sin(t * 0.013 + i * 2) * 8, 0.95));
   if (state) {
     state.players.filter(p => p.alive).forEach(p => { const r = rp.get(p.id); if (r) light(dctx, r.x, r.y, 185, 0.95); });
     if (state.keyDrop) light(dctx, state.keyDrop.x, state.keyDrop.y, 130, 0.95);
@@ -1225,14 +1236,14 @@ function render(t) {
     state.enemies.filter(e => e.kind === "boss").forEach(e => { const r = rp.get(e.id); if (r) light(dctx, r.x, r.y, 190, 0.8); });
   }
   ctx.drawImage(dark, 0, 0);
-  const mc = ["255,190,110", "140,255,190", "170,210,255", "255,225,130", "255,120,60"][stage];                  // drifting dust / embers / sparkles
+  const mc = ["255,190,110", "140,255,190", "170,210,255", "255,225,130", "255,120,60", "255,230,160", "200,255,170", "150,255,220", "255,245,220"][stage];                  // drifting dust / embers / sparkles
   motes.forEach(m => {
     m.s += 0.01 * m.z; m.x += Math.sin(m.s) * 0.25 * m.z + 0.12; m.y -= 0.18 * m.z; if (m.y < 60) { m.y = H - 20; m.x = Math.random() * W; } if (m.x > W) m.x = 0;
     ctx.fillStyle = `rgba(${mc},${0.25 + 0.3 * Math.abs(Math.sin(m.s * 2))})`; ctx.fillRect(m.x, m.y, m.z * 2.2, m.z * 2.2);
   });
   { const vg2 = ctx.createRadialGradient(W / 2, H / 2, 230, W / 2, H / 2, 520); vg2.addColorStop(0, "rgba(0,0,0,0)"); vg2.addColorStop(1, "rgba(0,0,0,.55)"); ctx.fillStyle = vg2; ctx.fillRect(0, 0, W, H); }
   ctx.save(); ctx.globalCompositeOperation = "lighter";                              // warm torch glow
-  TORCHES.forEach((x, i) => { const r = 120 + Math.sin(t * 0.013 + i * 2) * 8, gr = ctx.createRadialGradient(x + 3, 40, 4, x + 3, 40, r); gr.addColorStop(0, `rgba(${th.glow},.28)`); gr.addColorStop(1, `rgba(${th.glow},0)`); ctx.fillStyle = gr; ctx.fillRect(x - r, 0, r * 2 + 6, 40 + r); });
+  torchXs().forEach((x, i) => { const r = 120 + Math.sin(t * 0.013 + i * 2) * 8, gr = ctx.createRadialGradient(x + 3, 40, 4, x + 3, 40, r); gr.addColorStop(0, `rgba(${th.glow},.28)`); gr.addColorStop(1, `rgba(${th.glow},0)`); ctx.fillStyle = gr; ctx.fillRect(x - r, 0, r * 2 + 6, 40 + r); });
   ctx.restore();
   { const fx0 = (t * 0.012) % (W + 400) - 200;                                   // slow drifting fog
     ctx.save(); ctx.globalCompositeOperation = "lighter";
@@ -1244,9 +1255,9 @@ function render(t) {
     bctx2.clearRect(0, 0, 80, 52); bctx2.filter = "blur(2px)"; bctx2.drawImage(bl, 0, 0, 80, 52); bctx2.filter = "none";
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = "lighter"; ctx.imageSmoothingEnabled = true; ctx.globalAlpha = 0.3; ctx.drawImage(bl, 0, 0, canvas.width, canvas.height); ctx.globalAlpha = 0.34; ctx.drawImage(bl2, 0, 0, canvas.width, canvas.height); ctx.restore();
   } catch (e) {}
-  ctx.save(); ctx.globalCompositeOperation = "soft-light"; ctx.globalAlpha = 0.28; ctx.fillStyle = `rgb(${["255,190,120", "110,230,170", "140,180,255", "255,210,110", "255,90,50"][stage]})`; ctx.fillRect(0, 0, W, H); ctx.restore();   // colour grade
+  ctx.save(); ctx.globalCompositeOperation = "soft-light"; ctx.globalAlpha = 0.28; ctx.fillStyle = `rgb(${["255,190,120", "110,230,170", "140,180,255", "255,210,110", "255,90,50", "255,225,150", "150,230,140", "110,210,200", "255,235,190"][stage]})`; ctx.fillRect(0, 0, W, H); ctx.restore();   // colour grade
   ctx.save(); ctx.globalCompositeOperation = "lighter";                              // light shafts from the torches
-  TORCHES.forEach((x, i) => { const sw = Math.sin(t * 0.0007 + i * 1.7) * 14, a = 0.016 + 0.007 * Math.sin(t * 0.002 + i), gr = ctx.createLinearGradient(x + 3, 44, x + 3, 340); gr.addColorStop(0, `rgba(${th.glow},${a * 2.2})`); gr.addColorStop(1, `rgba(${th.glow},0)`);
+  torchXs().forEach((x, i) => { const sw = Math.sin(t * 0.0007 + i * 1.7) * 14, a = 0.016 + 0.007 * Math.sin(t * 0.002 + i), gr = ctx.createLinearGradient(x + 3, 44, x + 3, 340); gr.addColorStop(0, `rgba(${th.glow},${a * 2.2})`); gr.addColorStop(1, `rgba(${th.glow},0)`);
     ctx.fillStyle = gr; ctx.beginPath(); ctx.moveTo(x - 2, 44); ctx.lineTo(x + 8, 44); ctx.lineTo(x + 8 + sw * 2 + 55, 340); ctx.lineTo(x - 2 + sw * 2 - 55, 340); ctx.closePath(); ctx.fill(); });
   ctx.restore();
   ctx.save(); ctx.globalCompositeOperation = "overlay"; { const gg = ctx.createLinearGradient(0, 0, 0, H); gg.addColorStop(0, "rgba(255,255,255,.10)"); gg.addColorStop(1, "rgba(0,0,0,.22)"); ctx.fillStyle = gg; ctx.fillRect(0, 0, W, H); }

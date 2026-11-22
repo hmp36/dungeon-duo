@@ -52,3 +52,12 @@ button:disabled{opacity:.5;cursor:not-allowed;transform:none!important;filter:no
   .touchpad .atk, .touchpad .btns .atk { width: 84px; height: 84px; }
   .touchpad .btns { gap: 6px; }
 }
+
+#dlg{position:absolute;left:3%;right:3%;bottom:3%;background:#0b0f18f2;border:2px solid var(--gold);border-radius:10px;padding:14px 16px 8px;z-index:6;cursor:pointer;box-shadow:0 8px 30px #000a}
+#dlg b{font:10px 'Press Start 2P';color:var(--gold);display:block;margin-bottom:8px}
+#dlgText{font-size:16px;line-height:1.5;color:#f4f0e6;min-height:48px}
+#dlg small{display:block;text-align:right;margin-top:4px}
+#cap{position:absolute;left:6%;right:6%;bottom:4%;text-align:center;background:#0b0f18d0;border-radius:8px;padding:10px 14px;font-size:14px;color:#e8e2d0;z-index:5;pointer-events:none}
+#cap b{font:9px 'Press Start 2P';color:var(--gold);margin-right:8px}
+#mapOv{z-index:7;background:#090d15f2}
+.linkbtn{background:none;color:#8aa0c8;font:600 12px 'Space Grotesk';padding:0 4px;text-decoration:underline}

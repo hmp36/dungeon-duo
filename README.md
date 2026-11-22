@@ -54,6 +54,15 @@ The server serves the browser client and Socket.IO from the same origin, so no s
 
 This is a small V1 prototype, not a production-hardened game. It uses in-memory rooms and simple collision/AI. A player who disconnects leaves the current room; reconnect/rejoin recovery and persistent sessions are not included.
 
+## Story mode: Emberfall
+- Pick **Story Mode** when you create a room (it is on by default; Daily Dungeon uses the classic run instead).
+- You start in **Emberfall village**, a safe hub. Elder Marn tells the story (Space near him), and Pip sells upgrades (Space near his stall). Hearts refill whenever you return.
+- Four gates lead out: **Greenwood**, **Sunken Mire**, **Shattered Coast**, then the **Keep of Debt** (the original five rooms, ending with the Dragon of Debt). Each of the first three regions is three rooms with a Warden at the end, drops gear, and awards a sigil. The Keep needs all three sigils.
+- Every living hero must stand in a gate for a moment to travel. Press **M** (or MAP) for the valley map.
+- Gold, gear and upgrades carry between trips. If the team is wiped, retry the room or fall back to the village. Story runs are not ranked.
+- Progress (sigils and seen story beats) is saved in this browser. Reset it from the lobby.
+- Code: story rules live in `server.js` (`REGIONS`, `toHub`, `enterRegion`, `hubTick`); the village art, NPCs, dialogue and map are in `public/story.js`.
+
 ## Gear and combat
 - Chests, mimics and the boss drop gear (weapon, head, trinket; common, uncommon, rare). Press I (or GEAR) to equip. Every item changes how your hero looks (hats, blades, trinkets), and the gear panel shows a live portrait that updates as you equip and unequip. The Troubadour holds the guitar by the neck and swings it by the body like a club.
 - Attacks chain into a 4-hit combo: slash, backslash, whirlwind spin (hits all around), then an overhead ground pound (Ground Pound for the Knight, Power Chord for the Troubadour) with a stunning shockwave. Attacking right after a dash is a lunge. Gear can add crits.
