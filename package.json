@@ -1,0 +1,16 @@
+{
+  "name": "dungeon-duo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A two-player cooperative browser dungeon crawler",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  }
+}
