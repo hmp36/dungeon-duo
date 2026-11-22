@@ -16,6 +16,7 @@ const ROOM_W = 800, ROOM_H = 520;
 const MAX_HP = 5;
 const REVIVE_TIME = 2.2;       // seconds a teammate must stand next to a fallen hero
 const HIT_INVULN = 1100;       // ms of protection after taking a hit
+const NOTE_COOLDOWN = 4000, NOTE_STUN = 1800;
 const DASH_MS = 170, DASH_COOLDOWN = 1100;
 
 // Monster types. windup = warning time before a hit lands, cooldown = pause between attacks.
@@ -26,8 +27,8 @@ const MOB = {
   brute:    { hp: 6, speed: 30, range: 62, windup: 650, cooldown: 1900, dmg: 2, stop: 46 }
 };
 const roomLayouts = [
-  { name: "Forgotten Entrance", mobs: ["slime", "slime", "slime"], spawns: [[100, 260], [160, 260]], hearts: [] },
-  { name: "The Crypt", mobs: ["skeleton", "skeleton", "bat", "bat"], keeper: 0, spawns: [[90, 260], [145, 260]], hearts: [] },
+  { name: "Forgotten Entrance", mobs: ["slime", "slime", "slime"], spawns: [[100, 260], [160, 260]], hearts: [[330, 450]] },
+  { name: "The Crypt", mobs: ["skeleton", "skeleton", "bat", "bat"], keeper: 0, spawns: [[90, 260], [145, 260]], hearts: [[400, 450]] },
   { name: "Treasure Chamber", mobs: ["brute", "skeleton", "bat"], spawns: [[90, 260], [145, 260]], hearts: [[400, 440]] }
 ];
 const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
@@ -82,13 +83,13 @@ function publicState(room) {
     players: Object.values(room.players).map(p => ({
       id: p.id, name: p.name, slot: p.slot, x: p.x, y: p.y, hp: p.hp, alive: p.alive,
       facing: p.facing, attacking: now < p.attackUntil, dashing: now < p.dashUntil,
-      hurt: now - p.lastHit < 450, invuln: now - p.lastHit < HIT_INVULN,
+      noteCd: Math.max(0, Math.min(1, (p.lastNote + NOTE_COOLDOWN - now) / NOTE_COOLDOWN)), playing: now < (p.noteUntil || 0), hurt: now - p.lastHit < 450, invuln: now - p.lastHit < HIT_INVULN,
       revive: p.alive ? 0 : Math.min(1, p.reviveT / REVIVE_TIME)
     })),
     enemies: room.enemies.map(e => ({
       id: e.id, kind: e.kind, x: e.x, y: e.y, hp: e.hp, maxHp: e.maxHp, alive: e.alive,
       keeper: e.keeper && !room.key && !room.keyDrop,
-      hurt: now < e.hitUntil, winding: e.windupUntil > now, dormant: now < e.activeAt || !room.started
+      hurt: now < e.hitUntil, stunned: now < e.stunUntil, winding: e.windupUntil > now, dormant: now < e.activeAt || !room.started
     })),
     pickups: room.pickups,
     enemyCount: room.enemies.filter(e => e.alive).length,
@@ -134,7 +135,7 @@ io.on("connection", socket => {
       id: sock.id, name: String(name || `Player ${index + 1}`).slice(0, 18), slot,
       x: 100 + slot * 55, y: 260, hp: MAX_HP, alive: true, facing: "right",
       input: { up: false, down: false, left: false, right: false }, attackUntil: 0,
-      lastAttack: 0, lastHit: 0, lastDash: 0, dashUntil: 0, dashDir: [1, 0], reviveT: 0
+      lastAttack: 0, lastNote: 0, lastHit: 0, lastDash: 0, dashUntil: 0, dashDir: [1, 0], reviveT: 0
     };
     room.players[sock.id] = player;
     sock.join(room.code);
@@ -174,8 +175,8 @@ io.on("connection", socket => {
     const p = room?.players[socket.id];
     if (!p || !p.alive || room.finished || room.gameOver) return;
     const now = Date.now();
-    if (now - p.lastAttack < 350) return;
-    p.lastAttack = now; p.attackUntil = now + 230;
+    if (now - p.lastAttack < 480) return;
+    p.lastAttack = now; p.attackUntil = now + 260;
     fx(room, "swing", { id: p.id });
     const [dx, dy] = DIRS[p.facing] || [1, 0];
     room.enemies.forEach(e => {
@@ -183,11 +184,33 @@ io.on("connection", socket => {
       const vx = e.x - p.x, vy = e.y - p.y;
       const along = vx * dx + vy * dy, side = Math.abs(vx * dy - vy * dx);
       if (along >= -8 && along < 96 && side < 48) {
-        e.hp -= 1; e.hitUntil = now + 180; e.stunUntil = now + 260;
+        e.hp -= 2; e.hitUntil = now + 200; e.stunUntil = Math.max(e.stunUntil, now + 300);
         e.windupUntil = 0;                       // a hit interrupts the monster's attack
-        e.x = clampX(e.x + dx * 30); e.y = clampY(e.y + dy * 30);
+        e.x = clampX(e.x + dx * 40); e.y = clampY(e.y + dy * 40);
         if (e.hp <= 0) killEnemy(room, e);
         else fx(room, "hit", { x: e.x, y: e.y });
+      }
+    });
+    broadcast(room);
+  });
+
+
+  // Guitar riff: a wave of music notes that stuns every monster in front of you.
+  socket.on("note", () => {
+    const room = rooms.get(socket.data.roomCode);
+    const p = room?.players[socket.id];
+    if (!p || !p.alive || room.finished || room.gameOver) return;
+    const now = Date.now();
+    if (now - p.lastNote < NOTE_COOLDOWN) return;
+    p.lastNote = now; p.noteUntil = now + 600;
+    const [dx, dy] = DIRS[p.facing] || [1, 0];
+    fx(room, "notes", { id: p.id, x: p.x, y: p.y, facing: p.facing });
+    room.enemies.forEach(e => {
+      if (!e.alive) return;
+      const vx = e.x - p.x, vy = e.y - p.y, along = vx * dx + vy * dy, side = Math.abs(vx * dy - vy * dx);
+      if (along > -20 && along < 230 && side < 40 + Math.max(0, along) * 0.45) {
+        e.stunUntil = now + NOTE_STUN; e.windupUntil = 0; e.hitUntil = now + 120;
+        fx(room, "stun", { x: e.x, y: e.y });
       }
     });
     broadcast(room);
@@ -224,7 +247,7 @@ function killEnemy(room, e) {
     room.keyDrop = { x: clamp(e.x, 60, ROOM_W - 90), y: clamp(e.y, 80, ROOM_H - 60) };
     fx(room, "keydrop", room.keyDrop);
     notice(room, "The Keeper dropped the dungeon key! Grab it.");
-  } else if (Math.random() < 0.4 && room.pickups.length < 3) {
+  } else if (Math.random() < 0.6 && room.pickups.length < 3) {
     room.pickups.push({ id: `d${crypto.randomBytes(3).toString("hex")}`, x: clamp(e.x, 50, ROOM_W - 50), y: clamp(e.y, 80, ROOM_H - 50) });
   }
 }
@@ -314,7 +337,7 @@ function tick() {
 
     // Heart pickups heal anyone who isn't full.
     room.pickups = room.pickups.filter(pk => {
-      const taker = alive.find(p => p.hp < MAX_HP && Math.hypot(p.x - pk.x, p.y - pk.y) < 32);
+      const taker = alive.find(p => p.hp < MAX_HP && Math.hypot(p.x - pk.x, p.y - pk.y) < 40);
       if (!taker) return true;
       taker.hp++;
       fx(room, "heal", { x: pk.x, y: pk.y });

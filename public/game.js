@@ -34,6 +34,7 @@ function noise(dur, vol = 0.08, freq = 1500, delay = 0) {
   s.connect(f); f.connect(g); g.connect(a.destination); s.start(t);
 }
 const sfx = {
+  notes() { [392, 494, 587, 784].forEach((f, i) => tone(f, 0.18, "triangle", 0.08, null, i * 0.07)); noise(0.1, 0.03, 3000); },
   swing() { noise(0.12, 0.07, 1900); tone(320, 0.1, "sawtooth", 0.035, 120); },
   hit() { tone(190, 0.1, "square", 0.08, 70); noise(0.08, 0.06, 900); },
   kill() { tone(240, 0.28, "sawtooth", 0.07, 50); noise(0.22, 0.08, 500); },
@@ -109,6 +110,7 @@ window.addEventListener("keydown", e => {
   if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault();
   if (k === " ") { if (!e.repeat) socket.emit("attack"); return; }
   if (k === "shift" || k === "e") { if (!e.repeat) doDash(); return; }
+  if (k === "q" || k === "f") { if (!e.repeat) socket.emit("note"); return; }
   if (k === "w" || k === "arrowup") keys.up = true;
   if (k === "s" || k === "arrowdown") keys.down = true;
   if (k === "a" || k === "arrowleft") keys.left = true;
@@ -132,9 +134,10 @@ document.querySelectorAll("#touchPad [data-key]").forEach(b => {
 (() => {
   const atk = $("atkBtn"); let timer = null;
   const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
-  atk.addEventListener("pointerdown", e => { e.preventDefault(); socket.emit("attack"); stop(); timer = setInterval(() => socket.emit("attack"), 360); });
+  atk.addEventListener("pointerdown", e => { e.preventDefault(); socket.emit("attack"); stop(); timer = setInterval(() => socket.emit("attack"), 490); });
   ["pointerup", "pointercancel", "pointerleave"].forEach(t => atk.addEventListener(t, stop));
   atk.addEventListener("contextmenu", e => e.preventDefault());
+  const nb = $("noteBtn"); nb.addEventListener("pointerdown", e => { e.preventDefault(); socket.emit("note"); }); nb.addEventListener("contextmenu", e => e.preventDefault());
   const dash = $("dashBtn");
   dash.addEventListener("pointerdown", e => { e.preventDefault(); doDash(); });
   dash.addEventListener("contextmenu", e => e.preventDefault());
@@ -147,7 +150,7 @@ setInterval(() => {
 }, 50);
 
 /* ------------------------------------------------------------------ effects */
-const parts = [], floats = [], swing = {};
+const parts = [], floats = [], swing = {}, noteGlyphs = [];
 let shake = 0, hurtFlash = 0, banner = null, rp = new Map(), frame = 0;
 function burst(x, y, col, n, sp, life, size, grav = 0) {
   for (let i = 0; i < n; i++) {
@@ -168,6 +171,10 @@ function handleFx(f) {
     case "keydrop": burst(f.x, f.y, "#ffd86b", 24, 160, 800, 4, -30); floater(f.x, f.y - 30, "THE KEY!", "#ffe08a"); shake = Math.max(shake, 5); sfx.keydrop(); break;
     case "key": burst(f.x, f.y, "#ffe9a0", 26, 200, 800, 4, -60); floater(f.x, f.y - 30, "KEY GET!", "#ffe08a"); sfx.key(); break;
     case "door": burst(738, 262, "#ffd86b", 30, 200, 900, 4, -40); shake = Math.max(shake, 5); sfx.door(); break;
+    case "notes": { sfx.notes(); const d = f.facing === "left" ? -1 : f.facing === "right" ? 1 : 0, v = f.facing === "up" ? -1 : f.facing === "down" ? 1 : 0;
+      for (let i = 0; i < 9; i++) noteGlyphs.push({ x: f.x + d * 20, y: f.y - 10 + v * 20, vx: d * rnd(110, 260) + rnd(-40, 40) * (v ? 1 : 0), vy: v * rnd(110, 260) + rnd(-50, 50) * (d ? 1 : 0), life: 800, max: 800, g: ["♪", "♫", "♩"][i % 3], col: ["#ffe08a", "#7fe3ff", "#ff9dbb"][i % 3] });
+      break; }
+    case "stun": burst(f.x, f.y - 20, "#fff3b0", 8, 90, 450, 4); floater(f.x, f.y - 40, "STUNNED", "#ffe08a"); break;
     case "dash": burst(f.x, f.y, "#bfe9ff", 10, 120, 350, 4); sfx.dash(); break;
     case "down": burst(f.x, f.y, "#9aa3b5", 16, 120, 800, 5, -30); floater(f.x, f.y - 34, "DOWN!", "#ff8b8b"); sfx.down(); break;
     case "revive": burst(f.x, f.y, "#7fe3ff", 26, 150, 900, 4, -90); floater(f.x, f.y - 34, "REVIVED!", "#9cecff"); sfx.revive(); break;
@@ -294,19 +301,25 @@ function drawHero(p, r, t) {
   if (p.facing === "right") { px(x + 1, y - 16 + bob, 3, 3, "#29202a"); px(x + 5, y - 16 + bob, 2, 3, "#29202a"); }
   else if (p.facing === "left") { px(x - 4, y - 16 + bob, 3, 3, "#29202a"); px(x - 7, y - 16 + bob, 2, 3, "#29202a"); }
   else if (p.facing === "down") { px(x - 5, y - 16 + bob, 3, 3, "#29202a"); px(x + 2, y - 16 + bob, 3, 3, "#29202a"); }
-  const ang = ANG[p.facing] || 0, age = t - (swing[p.id] || -9999), swinging = age < 240;
-  ctx.save(); ctx.translate(x, y - 2 + bob); ctx.rotate(ang + (swinging ? -1.25 + (age / 240) * 2.5 : 0.85));
-  px(2, -1.5, 6, 3, "#6b4a2a"); px(7, -5, 4, 10, "#e8c452"); px(11, -2, 24, 4, "#dfe6ee"); px(35, -1, 3, 2, "#ffffff");
+  const ang = ANG[p.facing] || 0, age = t - (swing[p.id] || -9999), swinging = age < 260;
+  const playing = p.playing; ctx.save(); ctx.translate(x, y - 2 + bob);
+  if (playing) { ctx.rotate(ang * 0 + (p.facing === "left" ? 0.25 : -0.25) + Math.sin(t * 0.04) * 0.08); }
+  else ctx.rotate(ang + (swinging ? -1.25 + (age / 260) * 2.5 : 0.85));
+  const gx = playing ? (p.facing === "left" ? -8 : 8) : 0, gd = playing && p.facing === "left" ? -1 : 1;
+  ctx.translate(gx, playing ? 4 : 0); ctx.scale(playing ? gd : 1, 1);
+  px(2, -2, 22, 4, "#6b4a2a"); px(24, -4, 7, 8, "#3a2814"); px(26, -6, 2, 2, "#ddd"); px(29, -6, 2, 2, "#ddd");   // neck + headstock
+  px(-6, -9, 14, 18, "#c0562b"); px(-10, -6, 8, 12, "#c0562b"); px(-3, -9, 8, 3, "#e9824f"); px(-1, -3, 6, 6, "#2a1a10"); px(3, -1, 8, 2, "#e8dcc0");
   ctx.restore();
   ctx.globalAlpha = 1;
   if (swinging) {                                                                    // big slash arc
-    const pr = age / 240;
+    const pr = age / 260;
     ctx.save(); ctx.translate(x, y - 2); ctx.rotate(ang); ctx.lineCap = "round";
     ctx.globalAlpha = (1 - pr) * 0.95; ctx.strokeStyle = "#fff7c2"; ctx.lineWidth = 16 * (1 - pr * 0.5);
     ctx.beginPath(); ctx.arc(0, 0, 66, -1.1, 1.1); ctx.stroke();
     ctx.strokeStyle = "rgba(255,190,70,.9)"; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(0, 0, 76, -1.0, 1.0); ctx.stroke();
     ctx.restore(); ctx.globalAlpha = 1;
   }
+  if (me) { px(x - 14, y + 22, 28, 4, "#0c0e14"); px(x - 13, y + 23, 26 * (1 - p.noteCd), 2, p.noteCd > 0 ? "#6b7280" : "#7fe3ff"); }
   labels.push({ x, y: y - 32 + bob, text: p.name, col: me ? "#7fe3ff" : "#ffe08a", me });
 }
 function tint(base, e, t) { return e.hurt ? "#ffffff" : (e.winding && Math.floor(t / 70) % 2 === 0) ? "#ff6a5a" : base; }
@@ -358,6 +371,7 @@ function drawEnemy(e, r, t, faceX) {
     const bw = e.kind === "brute" ? 44 : 30, by = y - top - (e.keeper ? 22 : 8);
     px(x - bw / 2 - 1, by - 1, bw + 2, 6, "#0c0e14"); px(x - bw / 2, by, bw, 4, "#3a1f26"); px(x - bw / 2, by, bw * Math.max(0, e.hp / e.maxHp), 4, "#e66c75");
   }
+  if (e.stunned && !e.dormant) { for (let i = 0; i < 3; i++) { const a = t * 0.008 + i * 2.09; ctx.fillStyle = "#ffe08a"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center"; ctx.fillText("★", x + Math.cos(a) * 16, y - top - 6 + Math.sin(a) * 4); } }
   if (e.winding) {                                      // attack warning: pulsing ring + !
     const rg = RANGE[e.kind] || 46, pu = 0.7 + 0.3 * Math.sin(t * 0.03);
     ctx.fillStyle = "rgba(255,60,60,.16)"; ctx.beginPath(); ctx.arc(x, y, rg * pu, 0, 6.283); ctx.fill();
@@ -436,6 +450,12 @@ function render(t) {
     const p = parts[i]; p.life -= dt; if (p.life <= 0) { parts.splice(i, 1); continue; }
     p.vy += p.grav * dt / 1000; p.x += p.vx * dt / 1000; p.y += p.vy * dt / 1000;
     ctx.globalAlpha = Math.max(0, p.life / p.max); ctx.fillStyle = p.col; const s = p.size; ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s);
+  }
+  for (let i = noteGlyphs.length - 1; i >= 0; i--) {
+    const n = noteGlyphs[i]; n.life -= dt; if (n.life <= 0) { noteGlyphs.splice(i, 1); continue; }
+    n.x += n.vx * dt / 1000; n.y += n.vy * dt / 1000 + Math.sin(t * 0.02 + i) * 0.6; n.vx *= 0.985; n.vy *= 0.985;
+    ctx.globalAlpha = Math.min(1, n.life / 250); ctx.font = "bold 24px sans-serif"; ctx.textAlign = "center"; ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.7)";
+    ctx.strokeText(n.g, n.x, n.y); ctx.fillStyle = n.col; ctx.fillText(n.g, n.x, n.y);
   }
   ctx.globalAlpha = 1;
   // lighting: darkness with pools of light around torches, heroes, key and the open door

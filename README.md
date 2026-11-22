@@ -14,14 +14,14 @@ Hosted on Render's free tier, so the first visit after a quiet period can take u
 2. Player 1 enters a hero name and selects **Create a Room**.
 3. Share the six-character room code with Player 2.
 4. Player 2 enters the same code and selects **Join Room**.
-5. Move with **WASD** or the **arrow keys**. **Space** attacks (a big slash arc shows your reach). **Shift** dashes: a quick burst with brief invulnerability.
+5. Move with **WASD** or the **arrow keys**. **Space** smashes your guitar over enemies' heads (2 damage, big arc). **Q** plays a riff: music notes stun every monster in front of you for about 2 seconds (4 second cooldown). **Shift** dashes: a quick burst with brief invulnerability.
 6. Red rings and a "!" mean a monster is winding up a hit. Step back or dash out.
 7. Defeat all monsters to open the route forward. Monsters sleep until a teammate joins; use **Play solo** to test alone.
 8. In **Room 2 (The Crypt)** the glowing **Keeper** skeleton carries the dungeon key. Defeat him, then grab the key from the floor.
 9. Carry the key into **Room 3**. Clear the monsters, then have every living player stand by the exit on the right.
 10. You win when all surviving players escape.
 
-Each player has **5 hearts**. Monsters sometimes drop hearts. At zero hearts a hero falls, but a teammate can **revive** them by standing next to them for about 2 seconds. The team loses if everyone is down.
+Each player has **5 hearts**. Walk over hearts to pick them up: one is placed in every room and monsters often drop more. At zero hearts a hero falls, but a teammate can **revive** them by standing next to them for about 2 seconds. The team loses if everyone is down.
 
 Monsters: slimes, skeletons, fast erratic bats, and a heavy-hitting brute. Sound effects are built in (toggle with the Sound button).
 
