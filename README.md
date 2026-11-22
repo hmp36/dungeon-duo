@@ -60,7 +60,9 @@ This is a small V1 prototype, not a production-hardened game. It uses in-memory 
 - Four gates lead out: **Greenwood**, **Sunken Mire**, **Shattered Coast**, then the **Keep of Debt** (the original five rooms, ending with the Dragon of Debt). Each of the first three regions is three rooms with a Warden at the end, drops gear, and awards a sigil. The Keep needs all three sigils.
 - Every living hero must stand in a gate for a moment to travel. Press **M** (or MAP) for the valley map.
 - Gold, gear and upgrades carry between trips. If the team is wiped, retry the room or fall back to the village. Story runs are not ranked.
-- Progress (sigils and seen story beats) is saved in this browser. Reset it from the lobby.
+- Each region Warden has its own attack with a warning ring: the Thorn Warden fires a thorn volley, the Mire Mother births slimes, the Tidebreaker sends out a ring of slowing orbs.
+- Village side quests: Bram (slay 12 slimes, then 8 archers) and Nell (open 8 chests) pay gold and gear. Kills and chests count across trips, and a "!" or "?" floats over anyone with a quest.
+- Progress (sigils, quests and seen story beats) is saved in this browser. Reset it from the lobby.
 - Code: story rules live in `server.js` (`REGIONS`, `toHub`, `enterRegion`, `hubTick`); the village art, NPCs, dialogue and map are in `public/story.js`.
 
 ## Gear and combat

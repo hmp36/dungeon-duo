@@ -90,18 +90,20 @@ const REGIONS = {
   greenwood: { name: "Greenwood", gx: 120, req: [], layouts: [
     { name: "Mossy Path", mobs: ["slime", "slime", "slime", "bat"], hearts: [[330, 450]], chests: [[700, 100], [120, 470]], theme: 6, track: 0, tier: 0 },
     { name: "Hollow Oak", mobs: ["slime", "bat", "bat", "archer", "skeleton"], keeper: 4, hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]], theme: 6, track: 0, tier: 1 },
-    { name: "Thorn Warden's Grove", mobs: ["brute", "slime", "slime", "bat"], elite: 0, eliteName: "Thorn Warden", keeper: 1, hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470]], theme: 6, track: 0, tier: 1 }] },
+    { name: "Thorn Warden's Grove", mobs: ["brute", "slime", "slime", "bat"], elite: 0, eliteName: "Thorn Warden", trait: "thorn", keeper: 1, hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470]], theme: 6, track: 0, tier: 1 }] },
   mire: { name: "Sunken Mire", gx: 280, req: ["greenwood"], layouts: [
     { name: "Bog Crossing", mobs: ["slime", "slime", "hexer", "bat"], hearts: [[330, 450]], chests: [[700, 100], [120, 470]], theme: 7, track: 1, tier: 1 },
     { name: "Mushroom Hollow", mobs: ["hexer", "bomber", "slime", "skeleton", "bat"], keeper: 3, shield: [3], hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]], theme: 7, track: 1, tier: 1 },
-    { name: "The Mire Mother's Pool", mobs: ["brute", "hexer", "hexer", "bomber"], elite: 0, eliteName: "Mire Mother", keeper: 1, hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470]], theme: 7, track: 1, tier: 2 }] },
+    { name: "The Mire Mother's Pool", mobs: ["brute", "hexer", "hexer", "bomber"], elite: 0, eliteName: "Mire Mother", trait: "mire", keeper: 1, hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470]], theme: 7, track: 1, tier: 2 }] },
   coast: { name: "Shattered Coast", gx: 440, req: ["mire"], layouts: [
     { name: "Wreck Beach", mobs: ["skeleton", "skeleton", "archer", "bomber"], shield: [0], hearts: [[330, 450]], chests: [[700, 100], [120, 470]], theme: 8, track: 2, tier: 1 },
     { name: "Cliffside Battery", mobs: ["archer", "archer", "hexer", "skeleton", "bomber"], keeper: 3, shield: [3], hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]], theme: 8, track: 2, tier: 2 },
-    { name: "Tidebreaker's Cove", mobs: ["brute", "skeleton", "archer", "bomber", "hexer"], elite: 0, eliteName: "Tidebreaker", keeper: 2, shield: [1], hearts: [[400, 440]], chests: [[60, 90], [740, 90], [60, 470], [740, 470]], theme: 8, track: 2, tier: 2 }] },
+    { name: "Tidebreaker's Cove", mobs: ["brute", "skeleton", "archer", "bomber", "hexer"], elite: 0, eliteName: "Tidebreaker", trait: "tide", keeper: 2, shield: [1], hearts: [[400, 440]], chests: [[60, 90], [740, 90], [60, 470], [740, 470]], theme: 8, track: 2, tier: 2 }] },
   keep: { name: "The Keep of Debt", gx: 650, req: ["greenwood", "mire", "coast"], layouts: keepLayouts }
 };
 const REGION_IDS = Object.keys(REGIONS);
+const QUESTS = { pests: { kind: "slime", n: 12, gold: 70 }, archers: { kind: "archer", n: 8, item: "beret" }, chests: { kind: "chest", n: 8, gold: 30, item: "charm" } };
+const bumpQ = (room, kind) => { if (room.story) room.story.q[kind] = Math.min(999, (room.story.q[kind] || 0) + 1); };
 const unlocked = (room, id) => REGIONS[id].req.every(r => room.story.done.has(r));
 const LAY = room => (room.layouts || roomLayouts)[room.stage];
 const lastOf = room => (room.layouts || roomLayouts).length - 1;
@@ -117,6 +119,7 @@ const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 function makeCode() { let c = ""; for (let i = 0; i < 6; i++) c += CODE_CHARS[crypto.randomInt(CODE_CHARS.length)]; return c; }
 
 /* ------------------------------------------------------------------ rooms */
+const cleanQ = q => { const o = {}; if (q && typeof q === "object") for (const k of ["slime", "archer", "chest"]) o[k] = Math.max(0, Math.min(999, Math.floor(Number(q[k]) || 0))); return o; };
 function makeRoom(code, daily, diff, story) {
   const seed = daily ? parseInt(dailyKey().replace(/-/g, ""), 10) : 0;
   return {
@@ -142,7 +145,7 @@ function makeEnemies(stage, graceMs, room) {
   const layout = (room.layouts || roomLayouts)[stage], now = Date.now();
   if (layout.mobs[0] === "boss") return [newEnemy(room, "boss", 600, 240, { activeAt: now + graceMs + 800 })];
   return layout.mobs.map((kind, i) => newEnemy(room, kind, 430 + (i % 2) * 105, 115 + Math.floor(i / 2) * 155,
-    { keeper: layout.keeper === i, elite: layout.elite === i, shield: !!(layout.shield && layout.shield.includes(i)), activeAt: now + graceMs }));
+    { keeper: layout.keeper === i, elite: layout.elite === i, trait: layout.elite === i ? layout.trait : undefined, shield: !!(layout.shield && layout.shield.includes(i)), activeAt: now + graceMs }));
 }
 function initStage(room) {
   room.enemies = makeEnemies(room.stage, 1600, room);
@@ -213,7 +216,7 @@ function publicState(room) {
     waiting: !room.started, daily: room.daily, diff: room.diff, paused: room.paused, pausedBy: room.pausedBy,
     retry: room.retry.size, canRetry: room.gameOver && !room.finished && (room.stage > 0 || !!room.story) && room.scene !== "hub", rematch: room.rematch.size, needRematch: Object.keys(room.players).length, lastStage: lastOf(room), stageTotal: lastOf(room) + 1, roomName: LAY(room).name,
     scene: room.scene, region: room.region, theme: LAY(room).theme !== undefined ? LAY(room).theme : room.stage, track: LAY(room).track !== undefined ? LAY(room).track : room.stage,
-    story: room.story ? { done: [...room.story.done] } : null, gate: room.gate, eliteName: LAY(room).eliteName || null,
+    story: room.story ? { done: [...room.story.done], q: room.story.q, claimed: [...room.story.claimed] } : null, gate: room.gate, eliteName: LAY(room).eliteName || null,
     keyDrop: room.keyDrop,
     players: Object.values(room.players).map(p => ({
       id: p.id, name: p.name, slot: p.slot, cls: p.cls, x: p.x, y: p.y, hp: p.hp, cap: cap(p), alive: p.alive,
@@ -228,7 +231,7 @@ function publicState(room) {
       id: e.id, kind: e.kind, x: e.x, y: e.y, hp: e.hp, maxHp: e.maxHp, alive: true,
       keeper: e.keeper && !room.key && !room.keyDrop, hurt: now < e.hitUntil, stunned: now < e.stunUntil,
       winding: e.windupUntil > now || e.castUntil > now, dormant: now < e.activeAt || !room.started,
-      phase: e.phaseN, elite: !!e.elite, shield: !!e.shield
+      phase: e.phaseN, elite: !!e.elite, tr: e.trait || null, shield: !!e.shield
     })),
     shots: room.shots.map(s => ({ x: Math.round(s.x), y: Math.round(s.y), a: Math.atan2(s.vy, s.vx), k: s.kind })),
     pickups: room.pickups, chests: room.chests.map(c => ({ id: c.id, x: c.x, y: c.y, open: c.open })), gold: room.gold,
@@ -244,7 +247,7 @@ function notice(room, msg) { io.to(room.code).emit("notice", msg); }
 
 function shiftTimers(room, d) {
   if (d <= 0) return;
-  ["activeAt", "windupUntil", "nextAttackAt", "retreatUntil", "stunUntil", "hitUntil", "castUntil", "nextSpecialAt"].forEach(k => room.enemies.forEach(e => { if (e[k]) e[k] += d; }));
+  ["activeAt", "windupUntil", "nextAttackAt", "retreatUntil", "stunUntil", "hitUntil", "castUntil", "nextSpecialAt", "traitAt", "traitFire"].forEach(k => room.enemies.forEach(e => { if (e[k]) e[k] += d; }));
   ["attackUntil", "dashUntil", "lastHit", "lastNote", "lastSpecial", "lastDash", "noteUntil", "guardUntil", "nextAttackAt", "comboAt"].forEach(k => Object.values(room.players).forEach(p => { if (p[k]) p[k] += d; }));
   if (room.runStart) room.runStart += d;
 }
@@ -332,7 +335,7 @@ io.on("connection", socket => {
     let code;
     do { code = makeCode(); } while (rooms.has(code));
     const wantStory = !!story && !daily;
-    const room = makeRoom(code, !!daily, null, wantStory ? { done: new Set((Array.isArray(world && world.done) ? world.done : []).filter(id => REGIONS[id] && id !== "keep")) } : null);
+    const room = makeRoom(code, !!daily, null, wantStory ? { done: new Set((Array.isArray(world && world.done) ? world.done : []).filter(id => REGIONS[id] && id !== "keep")), q: cleanQ(world && world.q), claimed: new Set((Array.isArray(world && world.claimed) ? world.claimed : []).filter(id => QUESTS[id])) } : null);
     room.diff = cleanDiff(diff);
     rooms.set(code, room);
     joinRoom(socket, room, name, cls, cb);
@@ -517,6 +520,12 @@ io.on("connection", socket => {
     broadcast(room);
   });
 
+  socket.on("claim", id => {
+    const room = rooms.get(socket.data.roomCode); const p = room?.players[socket.id]; const q = QUESTS[id];
+    if (!room || !p || !room.story || room.scene !== "hub" || !q || room.story.claimed.has(id) || (room.story.q[q.kind] || 0) < q.n) return;
+    room.story.claimed.add(id); if (q.gold) room.gold += q.gold; if (q.item) giveItem(room, p, q.item);
+    bump(stats, "questsDone"); notice(room, `Quest complete!${q.gold ? ` +${q.gold} gold.` : ""}${q.item ? ` ${ITEMS[q.item].name} for ${p.name}.` : ""}`); broadcast(room);
+  });
   // Shop between rooms.
   socket.on("buy", item => {
     const room = rooms.get(socket.data.roomCode); const p = room?.players[socket.id];
@@ -595,6 +604,7 @@ function openChest(room, c, p) {
     notice(room, "It was a MIMIC!");
     return;
   }
+  bumpQ(room, "chest");
   const roll = rand(room);
   if (roll < 0.3 && p) { const id = rollItem(room); giveItem(room, p, id, c); fx(room, "chest", { x: c.x, y: c.y, loot: "item" }); return; }
   const heart = roll < 0.6 && room.pickups.length < 4;
@@ -604,7 +614,7 @@ function openChest(room, c, p) {
 }
 
 function killEnemy(room, e, p) {
-  e.alive = false;
+  e.alive = false; if (p && !e.elite) bumpQ(room, e.kind);
   if (p) p.stats.kills++;
   room.gold += defOf(e).gold;
   fx(room, "kill", { x: e.x, y: e.y, kind: e.kind });
@@ -637,6 +647,13 @@ function hurtPlayer(room, p, dmg, from, now) {
 
 function fireShot(room, x, y, ang, speed = 230, dmg = 1, kind = "arrow") {
   room.shots.push({ x, y, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 3200, dmg, kind });
+}
+
+function fireTrait(room, e, target) {
+  if (e.trait === "thorn") { const b = Math.atan2(target.y - e.y, target.x - e.x); for (let i = -3; i <= 3; i++) fireShot(room, e.x, e.y, b + i * 0.2, 190, 1, "arrow"); }
+  else if (e.trait === "mire") { if (room.enemies.filter(m => m.alive).length < 8) { room.enemies.push(newEnemy(room, "slime", clampX(e.x - 46), clampY(e.y + 30)), newEnemy(room, "slime", clampX(e.x - 46), clampY(e.y - 30))); notice(room, "The Mire Mother births slimes!"); } }
+  else if (e.trait === "tide") { for (let i = 0; i < 12; i++) fireShot(room, e.x, e.y, i * Math.PI / 6 + 0.1, 135, 1, "hex"); }
+  fx(room, "bossfire", { x: e.x, y: e.y });
 }
 
 function tick() {
@@ -681,6 +698,11 @@ function tick() {
         const dx = target.x - e.x, dy = target.y - e.y, d = Math.hypot(dx, dy) || 1;
         const boss = e.kind === "boss";
         let speedMul = 1, cdMul = 1;
+        if (e.elite && e.trait) {                         // each region Warden has a signature attack, telegraphed by a ring
+          if (!e.traitAt) e.traitAt = now + 5000;
+          if (e.traitFire && now >= e.traitFire) { e.traitFire = 0; fireTrait(room, e, target); }
+          else if (!e.traitFire && now >= e.traitAt) { e.traitFire = now + 700; e.traitAt = now + 8500; fx(room, "traitcue", { x: e.x, y: e.y, trait: e.trait }); }
+        }
 
         if (boss) {
           const frac = e.hp / e.maxHp, ph = frac > 0.66 ? 1 : frac > 0.33 ? 2 : 3;
@@ -827,5 +849,5 @@ setInterval(tick, 50);
 if (require.main === module) {
   server.listen(PORT, () => console.log(`Riff & Shield listening on ${PORT}`));
 } else {
-  module.exports = { retryRoom, server, io, rooms, MOB, MAX_HP, roomLayouts, REGIONS, toHub, enterRegion, initStage, startRun, ITEMS, giveItem, killEnemy, resetRoom, DIFFS };   // for automated tests
+  module.exports = { retryRoom, server, io, rooms, MOB, MAX_HP, roomLayouts, REGIONS, QUESTS, toHub, enterRegion, initStage, startRun, ITEMS, giveItem, killEnemy, resetRoom, DIFFS };   // for automated tests
 }

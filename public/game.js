@@ -450,6 +450,7 @@ function handleFx(f) {
     case "blocked": floater(f.x, f.y - 34, "BLOCKED", "#9cecff"); burst(f.x, f.y - 6, "#e8f4ff", 8, 170, 260, 3); sfx.hit(); break;
     case "mimic": burst(f.x, f.y, "#ffd86b", 22, 190, 700, 5, 150); floater(f.x, f.y - 34, "MIMIC!", "#ff8b8b"); shake = Math.max(shake, 9); sfx.hurt(); break;
     case "bossphase": shake = 20; banner = { text: f.phase === 3 ? "ENRAGED!" : "IT ROARS!", sub: "THE DRAGON OF DEBT", start: vnow(), until: vnow() + 1800 }; sfx.roar(); burst(f.x, f.y, "#ff8a3c", 30, 260, 800, 6, -40); break;
+    case "traitcue": { const c = { thorn: "120,230,120", mire: "80,230,210", tide: "110,170,255" }[f.trait] || "255,200,70"; rings.push({ x: f.x, y: f.y + 10, r: 10, max: 96, col: c, life: 700, t0: 700 }); rings.push({ x: f.x, y: f.y + 10, r: 4, max: 60, col: c, life: 500, t0: 500 }); sfx.guard(); break; }
     case "bossfire": burst(f.x, f.y, "#ffb347", 26, 240, 500, 5); sfx.fire(); shake = Math.max(shake, 6); break;
     case "slam": rings.push({ x: f.x, y: f.y + 20, r: 20, max: 120, col: "255,120,60", life: 420, t0: 420 }); burst(f.x, f.y + 30, "#c9a27c", 20, 220, 500, 6, 160); shake = Math.max(shake, 16); sfx.slam(); break;
     case "bigshake": shake = 18; break;
@@ -836,7 +837,7 @@ function tint(base, e, t) { return e.hurt ? "#ffffff" : (e.winding && Math.floor
 function drawEnemy(e, r, t, faceX) {
   const x = Math.round(r.x), y = Math.round(r.y), ph = (e.id.length * 1.7) % 6, dir = faceX >= 0 ? 1 : -1;
   if (e.keeper) { const gl = ctx.createRadialGradient(x, y, 4, x, y, 52); gl.addColorStop(0, "rgba(255,216,107,.55)"); gl.addColorStop(1, "rgba(255,216,107,0)"); ctx.fillStyle = gl; ctx.fillRect(x - 55, y - 55, 110, 110); }
-  if (e.elite) { const eg = ctx.createRadialGradient(x, y, 6, x, y, 74); eg.addColorStop(0, "rgba(255,200,70,.42)"); eg.addColorStop(1, "rgba(255,200,70,0)"); ctx.fillStyle = eg; ctx.fillRect(x - 76, y - 76, 152, 152); }
+  if (e.elite) { const tc = { thorn: "120,230,120", mire: "80,230,210", tide: "110,170,255" }[e.tr] || "255,200,70"; const eg = ctx.createRadialGradient(x, y, 6, x, y, 74); eg.addColorStop(0, `rgba(${tc},.42)`); eg.addColorStop(1, `rgba(${tc},0)`); ctx.fillStyle = eg; ctx.fillRect(x - 76, y - 76, 152, 152); }
   beginSprite(x, y); if (e.dormant) spA = 0.6;
   if (e.kind === "slime") {
     const hop = Math.abs(Math.sin(t * 0.005 + ph)), sq = Math.sin(t * 0.008 + ph) * 2.5, angry = e.winding;
@@ -1068,14 +1069,16 @@ function drawEnemy(e, r, t, faceX) {
     }
     ctx.restore();
   }
+    if (e.elite && e.tr) ctx.filter = { thorn: "hue-rotate(75deg) saturate(1.1)", mire: "hue-rotate(135deg) saturate(.9)", tide: "hue-rotate(190deg) saturate(1.1)" }[e.tr] || "none";
     endSprite((e.winding ? 1 + 0.08 * (0.5 + 0.5 * Math.sin(t * 0.03)) : 1 + Math.sin(t * 0.006 + ph) * 0.015) * (e.elite ? 1.5 : 1), 1, e.kind === "boss" ? 84 : e.kind === "brute" ? 52 : 36);
+    ctx.filter = "none";
   const top = e.kind === "boss" ? 96 : e.elite ? 86 : e.kind === "brute" ? 54 : e.kind === "bat" ? 30 : e.kind === "mimic" ? 30 : e.kind === "bomber" ? 36 : e.kind === "hexer" ? 44 : 34;
   if (e.keeper) { keyIcon(x - 10, y - top - 8 + Math.sin(t * 0.006) * 3, 0.9); }
   if (e.dormant) { ctx.fillStyle = "#cfe3ff"; ctx.font = "bold 13px sans-serif"; ctx.textAlign = "center"; ctx.fillText("z", x + 12, y - top + Math.sin(t * 0.004) * 3); ctx.fillText("Z", x + 20, y - top - 8 + Math.sin(t * 0.004 + 1) * 3); }
   if ((e.hp < e.maxHp || e.kind === "brute") && e.kind !== "boss") {
     const bw = e.elite ? 72 : e.kind === "brute" ? 44 : 30, by = y - top - (e.keeper ? 22 : 8);
     px(x - bw / 2 - 1, by - 1, bw + 2, 6, "#0c0e14"); px(x - bw / 2, by, bw, 4, "#3a1f26"); px(x - bw / 2, by, bw * Math.max(0, e.hp / e.maxHp), 4, e.elite ? "#f0c24a" : "#e66c75");
-    if (e.elite) { ctx.fillStyle = "#ffe08a"; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "center"; ctx.fillText(((state && state.eliteName) || "Iron Warden").toUpperCase(), x, by - 5); }
+    if (e.elite) { ctx.fillStyle = { thorn: "#a8f0a0", mire: "#9af0e0", tide: "#a8c8ff" }[e.tr] || "#ffe08a"; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "center"; ctx.fillText(((state && state.eliteName) || "Iron Warden").toUpperCase(), x, by - 5); }
   }
   if (e.stunned && !e.dormant) { for (let i = 0; i < 3; i++) { const a = t * 0.008 + i * 2.09; ctx.fillStyle = "#ffe08a"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center"; ctx.fillText("★", x + Math.cos(a) * 16, y - top - 6 + Math.sin(a) * 4); } }
   if (e.winding && (e.kind === "archer" || e.kind === "hexer") && state) { const tg = state.players.filter(p => p.alive).sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y))[0]; if (tg) { ctx.save(); ctx.strokeStyle = e.kind === "hexer" ? "rgba(190,130,255,.6)" : "rgba(255,90,90,.55)"; ctx.lineWidth = 2; ctx.setLineDash([8, 6]); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(tg.x, tg.y); ctx.stroke(); ctx.restore(); } }

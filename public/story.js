@@ -11,18 +11,18 @@ const REGIONS_C = [
 /* ---- saved progress (this device only) ---- */
 const WKEY = "dd_world";
 function readWorld() {
-  try { const w = JSON.parse(localStorage.getItem(WKEY) || "{}"); return { done: Array.isArray(w.done) ? w.done.filter(x => typeof x === "string") : [], seen: w.seen && typeof w.seen === "object" ? w.seen : {} }; }
-  catch (e) { return { done: [], seen: {} }; }
+  try { const w = JSON.parse(localStorage.getItem(WKEY) || "{}"); return { done: Array.isArray(w.done) ? w.done.filter(x => typeof x === "string") : [], seen: w.seen && typeof w.seen === "object" ? w.seen : {}, q: w.q && typeof w.q === "object" ? w.q : {}, claimed: Array.isArray(w.claimed) ? w.claimed : [] }; }
+  catch (e) { return { done: [], seen: {}, q: {}, claimed: [] }; }
 }
 let WORLD = readWorld();
 function saveWorld() { try { localStorage.setItem(WKEY, JSON.stringify(WORLD)); } catch (e) {} }
-function loadWorld() { return { done: WORLD.done }; }
+function loadWorld() { return { done: WORLD.done, q: WORLD.q || {}, claimed: WORLD.claimed || [] }; }
 (function lobbyStory() {
   const sc = $("storyChk"), dc = $("dailyChk"), rs = $("resetStory");
   if (sc && dc) { sc.addEventListener("change", () => { if (sc.checked) dc.checked = false; }); dc.addEventListener("change", () => { if (dc.checked) sc.checked = false; }); }
   const note = () => { const n = WORLD.done.length; if ($("storyNote")) $("storyNote").textContent = n ? `Saved: ${n} of 3 sigils${WORLD.done.includes("keep") ? " and the Keep cleared" : ""}.` : "No saved progress yet."; if (rs) rs.classList.toggle("hidden", !n); };
   note();
-  if (rs) rs.onclick = () => { WORLD = { done: [], seen: {} }; saveWorld(); note(); };
+  if (rs) rs.onclick = () => { WORLD = { done: [], seen: {}, q: {}, claimed: [] }; saveWorld(); note(); };
 })();
 
 /* ---- themes for the village and regions (indexes 5 to 8) ---- */
@@ -123,7 +123,11 @@ function buildOutdoorBg(stage) {
 }
 
 /* ---- the village: gates and townsfolk ---- */
-const NPCS = [{ id: "marn", name: "Elder Marn", x: 205, y: 335 }, { id: "pip", name: "Pip", x: 592, y: 345 }];
+const NPCS = [{ id: "marn", name: "Elder Marn", x: 205, y: 335 }, { id: "pip", name: "Pip", x: 592, y: 345 }, { id: "bram", name: "Bram", x: 345, y: 170 }, { id: "nell", name: "Nell", x: 170, y: 452 }];
+const QUEST_DEF = { pests: { who: "bram", kind: "slime", n: 12, label: "slimes", reward: "70 gold" }, archers: { who: "bram", kind: "archer", n: 8, label: "archers", reward: "a Plumed Beret", after: "pests" }, chests: { who: "nell", kind: "chest", n: 8, label: "chests opened", reward: "30 gold and a Lucky Charm" } };
+const qCount = k => (state && state.story && state.story.q && state.story.q[k]) || 0;
+const qClaimed = id => !!(state && state.story && state.story.claimed.includes(id));
+function questFor(who) { return Object.keys(QUEST_DEF).find(id => QUEST_DEF[id].who === who && !qClaimed(id) && (!QUEST_DEF[id].after || qClaimed(QUEST_DEF[id].after))); }
 function drawGate(r, t) {
   const x = r.gx, done = state.story.done.includes(r.id), locked = !r.req.every(q => state.story.done.includes(q));
   const gt = state.gate && state.gate.id === r.id ? state.gate : null;
@@ -171,6 +175,23 @@ function drawPip(x, y, t) {
   ball(x, y - 10 + b, 8, "#e8c4a0"); ball(x - 3, y - 11 + b, 1.1, "#2a2018"); ball(x + 3, y - 11 + b, 1.1, "#2a2018"); blob(x, y - 6 + b, 5, 1.8, "#4a2f1a");
   ctx.fillStyle = "#c9503a"; ctx.beginPath(); ctx.ellipse(x, y - 16 + b, 9, 6, 0, Math.PI, 0); ctx.fill(); px(x - 2, y - 17 + b, 11, 3, "#a83a2a");
 }
+function drawBram(x, y, t) {
+  shadow(x, y + 24, 14); const b = Math.sin(t * 0.0035 + 2) * 1;
+  px(x + 6, y - 22 + b, 3, 30, "#6b4a2a"); ctx.strokeStyle = "#6b4a2a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x + 9, y - 6 + b, 16, -1.2, 1.2); ctx.stroke();
+  blob(x, y + 6 + b, 12, 17, "#8a5a30"); blob(x, y + 12 + b, 12, 10, "#a06c3a"); rr(x - 11, y + 4 + b, 22, 3, 1, "#6b4a2a");
+  ball(x, y - 12 + b, 7.5, "#e0b896"); ball(x - 3, y - 12 + b, 1, "#2a2018"); ball(x + 3, y - 12 + b, 1, "#2a2018"); blob(x, y - 6 + b, 4, 1.4, "#6b4a2a");
+  ctx.fillStyle = "#5a3d22"; ctx.beginPath(); ctx.arc(x, y - 14 + b, 9.5, Math.PI, 0); ctx.lineTo(x + 6, y - 9 + b); ctx.lineTo(x - 6, y - 9 + b); ctx.closePath(); ctx.fill(); ctx.fillStyle = "#e8e0cc"; ctx.fillRect(x + 5, y - 22 + b, 2, 8);
+}
+function drawNell(x, y, t) {
+  shadow(x, y + 24, 14); const b = Math.sin(t * 0.004 + 4) * 1;
+  blob(x, y + 8 + b, 12, 16, "#c9a0d8"); rr(x - 9, y + 6 + b, 18, 15, 4, "#f4efe2"); ball(x, y - 10 + b, 7.5, "#eec9a8"); ball(x - 3, y - 10 + b, 1, "#2a2018"); ball(x + 3, y - 10 + b, 1, "#2a2018"); px(x - 2, y - 6 + b, 4, 1.2, "#c0564a");
+  ctx.fillStyle = "#f4efe2"; ctx.beginPath(); ctx.arc(x, y - 13 + b, 8.5, Math.PI, 0); ctx.fill(); px(x - 8.5, y - 14 + b, 17, 3, "#e0d8c4");
+  blob(x + 13, y + 10 + b, 8, 5, "#a8743a"); blob(x + 13, y + 7 + b, 6, 4, "#d9a860"); blob(x + 11, y + 6 + b, 3, 2, "#e8c080");
+}
+function questMark(x, y, t, id) {
+  const done = QUEST_DEF[id] && qCount(QUEST_DEF[id].kind) >= QUEST_DEF[id].n; ctx.font = "bold 16px 'Press Start 2P',monospace"; ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillText(done ? "?" : "!", x + 1, y + 1 + Math.sin(t * 0.006) * 3); ctx.fillStyle = done ? "#7be0a0" : "#ffd34a"; ctx.fillText(done ? "?" : "!", x, y + Math.sin(t * 0.006) * 3);
+}
 function nearNpc() {
   if (!state || !myId) return null; const me = state.players.find(p => p.id === myId); if (!me) return null;
   let best = null, bd = 78; for (const n of NPCS) { const d = Math.hypot(me.x - (n.id === "pip" ? n.x + 40 : n.x), me.y - n.y); if (d < bd) { bd = d; best = n; } } return best;
@@ -178,7 +199,8 @@ function nearNpc() {
 function drawHub(t) {
   if (!state || state.scene !== "hub" || !state.story) return;
   REGIONS_C.forEach(r => drawGate(r, t));
-  drawMarn(NPCS[0].x, NPCS[0].y, t); drawPip(NPCS[1].x, NPCS[1].y, t);
+  drawMarn(NPCS[0].x, NPCS[0].y, t); drawPip(NPCS[1].x, NPCS[1].y, t); drawBram(NPCS[2].x, NPCS[2].y, t); drawNell(NPCS[3].x, NPCS[3].y, t);
+  for (const n of NPCS) { const qid = questFor(n.id); if (qid) questMark(n.x, n.y - 54, t, qid); }
   for (let i = 0; i < 5; i++) { const a = t * 0.004 + i * 1.3; ctx.fillStyle = "rgba(220,245,255,.7)"; ctx.fillRect(400 + Math.cos(a) * 14, 270 + (a * 6) % 18 - Math.sin(a) * 2, 2, 2); }   // fountain spray
   const n = nearNpc();
   if (n && !dlgActive) { const bx = n.id === "pip" ? n.x : n.x, by = n.y - 64; ctx.font = "bold 8px 'Press Start 2P',monospace"; const w = ctx.measureText(n.name.toUpperCase() + ": SPACE").width + 16; rr(bx - w / 2, by - 12, w, 20, 5, "rgba(8,12,20,.85)"); ctx.fillStyle = "#ffe08a"; ctx.textAlign = "center"; ctx.fillText(n.name.toUpperCase() + ": SPACE", bx, by + 2); }
@@ -216,9 +238,23 @@ let pipMet = false;
 function hubInteract() {
   if (!state || state.scene !== "hub" || !state.story || dlgActive || state.waiting) return false;
   const n = nearNpc(); if (!n) return false;
+  if (n.id === "bram" || n.id === "nell") { questTalk(n); return true; }
   if (n.id === "marn") say(marnHint());
   else say(pipMet ? [["Pip", "Back again! Take a look."]] : [["Pip", "Gold? Wonderful. I mean, welcome! Hearts, quicker feet, tougher swings. Everything is priced fairly. Mostly."]], () => { pipMet = true; hubShopOpen = true; shopSig = ""; updateShop(); });
   return true;
+}
+
+const QTXT = {
+  pests: ["Bram", "Name's Bram. Slimes keep wrecking my snares. Slay 12 of them out there and I will make it worth your while.", "Slimes are going down, I hear. Keep at it."],
+  archers: ["Bram", "Good work on the slimes. Now the archers on the roads are a pest too. Take down 8 and I will give you something nice for the head.", "Watch your back, those archers aim well."],
+  chests: ["Nell", "Oh, travelers! The Dragon's men carted off my savings in chests all over the valley. Open 8 chests for me and I will pay you in gold and a charm.", "Any luck with those chests? They are out there somewhere."]
+};
+function questTalk(n) {
+  const id = questFor(n.id), who = n.name;
+  if (!id) return say([[who, n.id === "bram" ? "You cleared out every pest I had. Thank you, friend. Safe roads." : "Nobody ever paid back what that dragon took, but you came close. Thank you!"]]);
+  const q = QUEST_DEF[id], c = Math.min(q.n, qCount(q.kind)), t = QTXT[id];
+  if (c >= q.n) return say([[who, `That is the ${q.n}! Here is ${q.reward} as promised.`]], () => socket.emit("claim", id));
+  say([[who, c === 0 ? t[1] : t[2]], [who, `Progress: ${c}/${q.n} ${q.label}. Reward: ${q.reward}.`]]);
 }
 
 /* ---- hub shop ---- */
@@ -286,7 +322,9 @@ function storyOverlay(ended) {
 }
 function storyOnState(s) {
   if (!s.story) { if (mapOpen) toggleMap(); return; }
-  let ch = false; for (const id of s.story.done) if (!WORLD.done.includes(id)) { WORLD.done.push(id); ch = true; } if (ch) saveWorld();
+  let ch = false; for (const id of s.story.done) if (!WORLD.done.includes(id)) { WORLD.done.push(id); ch = true; }
+  if (JSON.stringify(WORLD.q) !== JSON.stringify(s.story.q) || JSON.stringify(WORLD.claimed) !== JSON.stringify(s.story.claimed)) { WORLD.q = s.story.q; WORLD.claimed = s.story.claimed; ch = true; }
+  if (ch) saveWorld();
   if (s.scene !== "hub" && hubShopOpen) closeHubShop();
   if (s.scene === "hub") $("cap").classList.add("hidden");
   if (s.scene === "hub") {
