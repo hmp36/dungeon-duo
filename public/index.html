@@ -10,7 +10,7 @@
   <main class="shell">
     <header class="topbar"><div class="brand">⚔ DUNGEON <span>DUO</span></div><div class="tag">TWO HEROES. ONE WAY OUT.</div></header>
     <section id="lobby" class="panel lobby">
-      <div class="intro"><div class="eyebrow">CO-OP PIXEL ADVENTURE</div><h1>Enter the dungeon.<br><em>Escape together.</em></h1><p>Team up with a friend, clear three rooms, find the key in the Crypt, and get every surviving hero to the exit.</p></div>
+      <div class="intro"><div class="eyebrow">CO-OP PIXEL ADVENTURE</div><h1>Enter the dungeon.<br><em>Escape together.</em></h1><p>Team up with a friend, clear three rooms, beat the Keeper for the key in the Crypt, and get every surviving hero to the exit.</p></div>
       <div class="joinbox"><label for="playerName">HERO NAME</label><input id="playerName" maxlength="18" placeholder="Your name" value="Hero">
         <button id="createBtn" class="primary">CREATE A ROOM</button>
         <div class="divider"><span>OR JOIN A FRIEND</span></div>
@@ -21,12 +21,13 @@
     <section id="game" class="game hidden">
       <div class="hud">
         <div><small>ROOM</small><strong id="roomLabel">1 / 3</strong></div>
-        <div><small>YOUR TEAM</small><strong id="healthLabel">❤️❤️❤️　❤️❤️❤️</strong></div>
+        <div><small>YOUR TEAM</small><strong id="healthLabel">❤️❤️❤️❤️❤️</strong></div>
         <div><small>ENEMIES</small><strong id="enemyLabel">3 remaining</strong></div>
         <div><small>DUNGEON KEY</small><strong id="keyLabel">🔒 Not found</strong></div>
         <div class="codebox"><small>ROOM CODE</small><strong id="codeLabel">------</strong><button id="copyBtn">COPY</button></div>
       </div>
       <div class="stage-wrap"><canvas id="gameCanvas" width="800" height="520"></canvas><div id="overlay" class="overlay hidden"><h2 id="overlayTitle"></h2><p id="overlayText"></p><button id="againBtn" class="primary">BACK TO LOBBY</button></div></div>
+      <div class="actions"><button id="soloBtn" class="secondary hidden">PLAY SOLO</button><button id="muteBtn" class="secondary">SOUND: ON</button></div>
       <div id="touchPad" class="touchpad">
         <div class="dpad">
           <button data-key="up" class="d-up" aria-label="Move up">&#9650;</button>
@@ -34,10 +35,10 @@
           <button data-key="right" class="d-right" aria-label="Move right">&#9654;</button>
           <button data-key="down" class="d-down" aria-label="Move down">&#9660;</button>
         </div>
-        <button id="atkBtn" class="atk" aria-label="Attack">ATTACK</button>
+        <div class="btns"><button id="dashBtn" class="dash" aria-label="Dash">DASH</button><button id="atkBtn" class="atk" aria-label="Attack">ATTACK</button></div>
       </div>
-      <div class="below"><div id="status">Waiting for your teammate…</div><div class="controls"><b>MOVE</b> WASD / ARROWS <b>ATTACK</b> SPACE</div></div>
-      <aside class="rules"><b>HOW TO ESCAPE</b><span>1. Clear every monster in each room.</span><span>2. Find the glowing key in Room 2.</span><span>3. Carry it to Room 3. Every hero still standing must reach the exit.</span><span>❤️ You each have 3 hearts. At 0 hearts, you're out—no revives, but the team can still win. If everyone falls, the team loses.</span></aside>
+      <div class="below"><div id="status">Waiting for your teammate…</div><div class="controls"><b>MOVE</b> WASD / ARROWS <b>ATTACK</b> SPACE <b>DASH</b> SHIFT</div></div>
+      <aside class="rules"><b>HOW TO ESCAPE</b><span>1. Clear every monster in each room. Red rings mean a hit is coming: step back or dash.</span><span>2. In the Crypt, the glowing Keeper (key above his head) carries the dungeon key. Defeat him and grab it.</span><span>3. Carry it to Room 3. Every hero still standing must reach the exit.</span><span>❤️ 5 hearts each. If a hero falls, stand next to them for about 2 seconds to revive. Hearts drop from monsters. If everyone falls, the team loses.</span></aside>
     </section>
     <footer>Built for brave friends • Stay together, watch your hearts.</footer>
   </main>

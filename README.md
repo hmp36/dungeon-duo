@@ -14,13 +14,16 @@ Hosted on Render's free tier, so the first visit after a quiet period can take u
 2. Player 1 enters a hero name and selects **Create a Room**.
 3. Share the six-character room code with Player 2.
 4. Player 2 enters the same code and selects **Join Room**.
-5. Move with **WASD** or the **arrow keys**. Press **Space** to attack.
-6. Defeat all monsters to open the route forward.
-7. In **Room 2**, after clearing the monsters, find the glowing key near the right side of the room.
-8. Carry the key into **Room 3**. Clear the monsters, then have every living player stand by the exit on the right.
-9. You win when all surviving players escape. A player who is out does not need to reach the exit.
+5. Move with **WASD** or the **arrow keys**. **Space** attacks (a big slash arc shows your reach). **Shift** dashes: a quick burst with brief invulnerability.
+6. Red rings and a "!" mean a monster is winding up a hit. Step back or dash out.
+7. Defeat all monsters to open the route forward. Monsters sleep until a teammate joins; use **Play solo** to test alone.
+8. In **Room 2 (The Crypt)** the glowing **Keeper** skeleton carries the dungeon key. Defeat him, then grab the key from the floor.
+9. Carry the key into **Room 3**. Clear the monsters, then have every living player stand by the exit on the right.
+10. You win when all surviving players escape.
 
-Each player starts with **3 hearts**. At zero hearts that player is out; there is **no revive mechanic**. The team loses if everyone is out.
+Each player has **5 hearts**. Monsters sometimes drop hearts. At zero hearts a hero falls, but a teammate can **revive** them by standing next to them for about 2 seconds. The team loses if everyone is down.
+
+Monsters: slimes, skeletons, fast erratic bats, and a heavy-hitting brute. Sound effects are built in (toggle with the Sound button).
 
 ## Run locally
 
@@ -44,13 +47,13 @@ Open <http://localhost:3000> in two browser windows/devices on the same network.
 
 The server serves the browser client and Socket.IO from the same origin, so no separate frontend hosting or CORS setup is needed. The room state is held in server memory; rooms reset when the server restarts, which is appropriate for this first version.
 
-## Version 1 scope
+## Features
 
-- Room-code creation and joining for up to two players (one player can also start alone to test).
-- Server-mediated movement, combat, enemy AI, health, key pickup, and room progression.
-- Three compact rooms, basic melee combat, three hearts per player.
-- Key appears in Room 2 after its monsters are defeated; exit is in Room 3.
-- On-screen controls, rules, team health, enemy count, room code, and win/loss overlays.
+- Room-code creation and joining for up to two players, plus solo mode.
+- Server-authoritative movement, combat, enemy AI, health, revive, key and room progression.
+- Three themed rooms with torch lighting, animated sprites, particles, screen shake and WebAudio sound.
+- Attack telegraphs, knockback, hit invulnerability, dash and heart pickups.
+- On-screen touch controls (d-pad, attack, dash), team health, enemy count and win/loss overlays.
 
 ## Notes
 
