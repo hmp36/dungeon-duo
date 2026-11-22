@@ -5,7 +5,7 @@ let ctx = mctx;
 const W = 800, H = 520, DPR = 2; canvas.width = W * DPR; canvas.height = H * DPR;
 let myId = null, roomCode = "", state = null, keys = {};
 const roomNames = ["Forgotten Entrance", "The Crypt", "Archer Gallery", "Treasure Chamber", "Dragon of Debt"];
-const RANGE = { bomber: 84, slime: 46, skeleton: 50, bat: 40, brute: 62, archer: 30, mimic: 46, boss: 108 };
+const RANGE = { hexer: 30, bomber: 84, slime: 46, skeleton: 50, bat: 40, brute: 62, archer: 30, mimic: 46, boss: 108 };
 const ANG = { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 };
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -363,6 +363,7 @@ window.addEventListener("keydown", e => {
   if (k === "i" && !e.repeat) { toggleGear(); return; }
   if (k === "p" && !e.repeat && !(e.target && e.target.tagName === "INPUT")) { togglePause(); return; }
   if (k === "r") { if (!e.repeat) socket.emit("special"); return; }
+  if (k >= "1" && k <= "4" && !e.repeat && !(e.target && e.target.tagName === "INPUT")) { socket.emit("emote", Number(k) - 1); return; }
   if (k === "w" || k === "arrowup") keys.up = true;
   if (k === "s" || k === "arrowdown") keys.down = true;
   if (k === "a" || k === "arrowleft") keys.left = true;
@@ -412,13 +413,16 @@ function burst(x, y, col, n, sp, life, size, grav = 0) {
   }
 }
 function floater(x, y, text, col) { floats.push({ x, y, text, col, life: 900, max: 900 }); }
-const KIND_COL = { bomber: "#ff8a3c", slime: "#5cc86b", skeleton: "#e8e4d4", bat: "#8e5bc4", brute: "#c0503b" };
+const KIND_COL = { hexer: "#9b6bd6", bomber: "#ff8a3c", slime: "#5cc86b", skeleton: "#e8e4d4", bat: "#8e5bc4", brute: "#c0503b" };
 function handleFx(f) {
   const now = vnow();
   switch (f.type) {
     case "swing": swing[f.id] = { t: now, k: f.kind || 0 }; sfx.swing(); if (f.kind === 4) setTimeout(() => sfx.swing(), 110); break;
     case "pound": { const kn = f.cls === "knight"; rings.push({ x: f.x, y: f.y + 6, r: 12, max: 112, col: kn ? "200,230,255" : "255,190,90", life: 480, t0: 480 }); rings.push({ x: f.x, y: f.y + 6, r: 6, max: 70, col: "255,255,255", life: 320, t0: 320 }); burst(f.x, f.y + 8, "#c9a27c", 22, 230, 560, 6, 200); burst(f.x, f.y, kn ? "#dfe9ff" : "#ffd27a", 14, 260, 420, 4); if (!kn) for (let i = 0; i < 6; i++) noteGlyphs.push({ x: f.x + rnd(-30, 30), y: f.y - 8, vx: rnd(-90, 90), vy: rnd(-170, -70), life: 800, max: 800, g: ["♪", "♫", "♩"][i % 3], col: "#ffe08a" }); floater(f.x, f.y - 34, kn ? "GROUND POUND!" : "POWER CHORD!", "#ffd34d"); shake = Math.max(shake, 14); sfx.slam(); break; }
     case "hit": if (f.big) hitStop(75); else if (f.crit) hitStop(55); if (f.crit) floater(f.x, f.y - 30, "CRIT!", "#ffd34d"); if (f.big) { shake = Math.max(shake, 9); burst(f.x, f.y, "#ffb070", 12, 220, 450, 5); } burst(f.x, f.y, "#fff3b0", 8, 150, 380, 4); burst(f.x, f.y, "#ffb347", 5, 110, 320, 3); shake = Math.max(shake, 3); sfx.hit(); break;
+    case "hexcast": burst(f.x, f.y - 6, "#c9a0ff", 12, 150, 380, 4); rings.push({ x: f.x, y: f.y, r: 8, max: 34, col: "170,110,255", life: 300, t0: 300 }); sfx.guard(); break;
+    case "slowed": floater(f.x, f.y - 34, "SLOWED", "#c9a0ff"); burst(f.x, f.y, "#a070e8", 10, 90, 500, 4); break;
+    case "emote": { const E = [["HELP!", "#ff9a9a"], ["OVER HERE!", "#9cecff"], ["NICE!", "#9cffb8"], ["WATCH OUT!", "#ffe08a"]][f.k]; if (E) { floater(f.x, f.y - 62, E[0], E[1]); burst(f.x, f.y - 50, E[1], 5, 70, 350, 3, -40); sfx.heal(); } break; }
     case "boom": rings.push({ x: f.x, y: f.y, r: 14, max: 86, col: "255,150,50", life: 420, t0: 420 }); rings.push({ x: f.x, y: f.y, r: 6, max: 56, col: "255,240,180", life: 260, t0: 260 }); burst(f.x, f.y, "#ffb347", 26, 280, 520, 6); burst(f.x, f.y, "#3a3a44", 14, 160, 700, 7, -30); shake = Math.max(shake, 15); sfx.slam(); break;
     case "kill": if (f.kind === "brute" || f.kind === "boss") hitStop(110); splats.push({ x: f.x, y: f.y + 8, col: KIND_COL[f.kind] || "#fff", kind: f.kind, r: rnd(0, 6.28) }); if (splats.length > 40) splats.shift(); burst(f.x, f.y, KIND_COL[f.kind] || "#fff", 22, 190, 650, 5, 220); burst(f.x, f.y, "#cfd3dc", 8, 90, 700, 7); shake = Math.max(shake, 7); sfx.kill(); break;
     case "hurt": burst(f.x, f.y, "#ff5a5a", 14, 170, 520, 4); shake = Math.max(shake, 11); floater(f.x, f.y - 30, "-" + f.dmg, "#ff6b6b"); if (f.id === myId) hurtFlash = 0.55; sfx.hurt(); break;
@@ -751,6 +755,7 @@ function drawHero(p, r, t) {
   if (view !== "back") drawW();
   ctx.restore();
   endSprite(1, 1, 42);
+  if (p.slowed) { ctx.save(); ctx.strokeStyle = "rgba(170,110,255,.8)"; ctx.lineWidth = 2.4; ctx.setLineDash([5, 4]); ctx.lineDashOffset = -t * 0.03; ctx.beginPath(); ctx.ellipse(x, y + 17, 16, 6, 0, 0, 6.283); ctx.stroke(); ctx.restore(); }
   if (guardFx) { ctx.strokeStyle = "rgba(127,227,255,.8)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y - 4, 30 + Math.sin(t * 0.02) * 2, 0, 6.283); ctx.stroke(); ctx.fillStyle = "rgba(127,227,255,.12)"; ctx.fill(); }
   if (attacking) {                                                                   // sweeping trail follows the weapon
     const pr = ageRaw / dur, aW = ANG[f] || 0, mir = f === "left" ? -1 : 1;
@@ -870,6 +875,25 @@ function drawEnemy(e, r, t, faceX) {
     if (aim) { ctx.strokeStyle = "#caa86a"; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(draw, 0); ctx.lineTo(24, 0); ctx.stroke(); ctx.fillStyle = "#dfe6ee"; ctx.beginPath(); ctx.moveTo(24, -2.6); ctx.lineTo(30, 0); ctx.lineTo(24, 2.6); ctx.fill(); ctx.fillStyle = "#e8584a"; ctx.fillRect(draw - 0.5, -2.4, 4, 1.6); ctx.fillRect(draw - 0.5, 0.8, 4, 1.6); ctx.strokeStyle = "rgba(255,230,140,.85)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(draw, 0); ctx.lineTo(22, 0); ctx.stroke(); }
     ctx.restore(); limb(x - 4, y - 9, x + (aim ? draw + 7 : 9), y - 4, 3.4, tint("#3f6330", e, t)); ball(x + (aim ? draw + 7 : 9), y - 4, 2.1, "#e8b98a");
     ctx.restore();
+  } else if (e.kind === "hexer") {
+    const cast = e.winding, fl = Math.sin(t * 0.006 + ph) * 2.2, sw = Math.sin(t * 0.004 + ph);
+    shadow(x, y + 19, 13 - fl * 0.3);
+    ctx.save(); ctx.translate(x, 0); ctx.scale(dir, 1); ctx.translate(-x, 0);
+    const hy2 = y - fl;
+    const rg = ctx.createLinearGradient(x, hy2 - 16, x, hy2 + 20); rg.addColorStop(0, tint("#6a3fa8", e, t)); rg.addColorStop(1, tint("#2a1650", e, t));
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.moveTo(x - 9, hy2 - 12); ctx.quadraticCurveTo(x - 19, hy2 + 6, x - 15 - sw * 1.4, hy2 + 20); for (let i = 0; i < 5; i++) ctx.lineTo(x - 15 - sw * 1.4 + (i + 0.5) * 6.2, hy2 + (i % 2 ? 20 : 15)); ctx.lineTo(x + 15 + sw * 1.4, hy2 + 20); ctx.quadraticCurveTo(x + 19, hy2 + 6, x + 9, hy2 - 12); ctx.quadraticCurveTo(x, hy2 - 17, x - 9, hy2 - 12); ctx.fill();
+    ctx.strokeStyle = "rgba(235,200,255,.38)"; ctx.lineWidth = 1.4; for (const k2 of [-5, 0, 5]) { ctx.beginPath(); ctx.moveTo(x + k2, hy2 - 8); ctx.quadraticCurveTo(x + k2 * 1.4, hy2 + 6, x + k2 * 1.2 - sw, hy2 + 17); ctx.stroke(); }
+    ctx.fillStyle = "#e8c452"; ctx.fillRect(x - 9, hy2 - 1, 18, 2.6); ball(x, hy2 + 0.3, 2.2, "#b37cff");
+    ctx.fillStyle = tint("#4a2a80", e, t); ctx.beginPath(); ctx.moveTo(x - 10, hy2 - 8); ctx.quadraticCurveTo(x - 13, hy2 - 24, x + 1, hy2 - 31); ctx.quadraticCurveTo(x + 13, hy2 - 24, x + 10, hy2 - 8); ctx.quadraticCurveTo(x, hy2 - 13, x - 10, hy2 - 8); ctx.fill();
+    ctx.fillStyle = "#120a22"; ctx.beginPath(); ctx.ellipse(x + 1.5, hy2 - 19, 6.2, 7.4, 0, 0, 6.283); ctx.fill();
+    const ec = cast ? "#ff7ad9" : "#c9a0ff"; ball(x + 3.8, hy2 - 20, 1.9, ec); ball(x - 0.8, hy2 - 20, 1.9, ec); ball(x + 3.8, hy2 - 20, 3.6, "rgba(200,140,255,.28)"); ball(x - 0.8, hy2 - 20, 3.6, "rgba(200,140,255,.28)");
+    ctx.fillStyle = "#e8dcc0"; ctx.beginPath(); ctx.moveTo(x - 6, hy2 - 30); ctx.quadraticCurveTo(x - 12, hy2 - 38, x - 7, hy2 - 42); ctx.quadraticCurveTo(x - 7, hy2 - 36, x - 2, hy2 - 31); ctx.fill();
+    limb(x - 8, hy2 - 8, x - 12, hy2 + 4, 3.4, tint("#4a2a80", e, t)); ball(x - 12, hy2 + 5, 2.2, "#cdb9e8");
+    const sx2 = x + 15, sy2 = hy2 - 4; limb(x + 8, hy2 - 8, sx2 - 1, sy2 + 1, 3.4, tint("#4a2a80", e, t)); ball(sx2, sy2 + 1, 2.2, "#cdb9e8");
+    ctx.strokeStyle = "#5a3d1f"; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(sx2, sy2 + 18); ctx.lineTo(sx2, sy2 - 20); ctx.stroke(); ctx.strokeStyle = "#e8c452"; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(sx2, sy2 - 22, 4.6, 0.7, 5.6); ctx.stroke();
+    const oR = cast ? 6.6 + Math.sin(t * 0.05) * 1.4 : 4.4; ball(sx2, sy2 - 22, oR * 2.3, "rgba(160,100,255," + (cast ? 0.35 : 0.2) + ")"); ball(sx2, sy2 - 22, oR, cast ? "#ffd2f6" : "#d8b8ff"); ball(sx2 - 1, sy2 - 23.2, oR * 0.4, "#fff");
+    if (cast) for (let i = 0; i < 4; i++) { const a2 = t * 0.012 + i * 1.57; ball(sx2 + Math.cos(a2) * 11, sy2 - 22 + Math.sin(a2) * 5, 1.2, "#e6c8ff"); }
+    ctx.restore();
   } else if (e.kind === "bomber") {
     const fuse = e.winding, pulse = fuse ? 1 + Math.sin(t * 0.05) * 0.1 : 1, run = Math.sin(t * 0.03 + ph), by0 = y - Math.abs(run) * 2;
     shadow(x, y + 17, 14);
@@ -986,7 +1010,7 @@ function drawEnemy(e, r, t, faceX) {
     ctx.restore();
   }
     endSprite((e.winding ? 1 + 0.08 * (0.5 + 0.5 * Math.sin(t * 0.03)) : 1 + Math.sin(t * 0.006 + ph) * 0.015) * (e.elite ? 1.5 : 1), 1, e.kind === "boss" ? 84 : e.kind === "brute" ? 52 : 36);
-  const top = e.kind === "boss" ? 96 : e.elite ? 86 : e.kind === "brute" ? 54 : e.kind === "bat" ? 30 : e.kind === "mimic" ? 30 : e.kind === "bomber" ? 36 : 34;
+  const top = e.kind === "boss" ? 96 : e.elite ? 86 : e.kind === "brute" ? 54 : e.kind === "bat" ? 30 : e.kind === "mimic" ? 30 : e.kind === "bomber" ? 36 : e.kind === "hexer" ? 44 : 34;
   if (e.keeper) { keyIcon(x - 10, y - top - 8 + Math.sin(t * 0.006) * 3, 0.9); }
   if (e.dormant) { ctx.fillStyle = "#cfe3ff"; ctx.font = "bold 13px sans-serif"; ctx.textAlign = "center"; ctx.fillText("z", x + 12, y - top + Math.sin(t * 0.004) * 3); ctx.fillText("Z", x + 20, y - top - 8 + Math.sin(t * 0.004 + 1) * 3); }
   if ((e.hp < e.maxHp || e.kind === "brute") && e.kind !== "boss") {
@@ -995,8 +1019,8 @@ function drawEnemy(e, r, t, faceX) {
     if (e.elite) { ctx.fillStyle = "#ffe08a"; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "center"; ctx.fillText("IRON WARDEN", x, by - 5); }
   }
   if (e.stunned && !e.dormant) { for (let i = 0; i < 3; i++) { const a = t * 0.008 + i * 2.09; ctx.fillStyle = "#ffe08a"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center"; ctx.fillText("★", x + Math.cos(a) * 16, y - top - 6 + Math.sin(a) * 4); } }
-  if (e.winding && e.kind === "archer" && state) { const tg = state.players.filter(p => p.alive).sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y))[0]; if (tg) { ctx.save(); ctx.strokeStyle = "rgba(255,90,90,.55)"; ctx.lineWidth = 2; ctx.setLineDash([8, 6]); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(tg.x, tg.y); ctx.stroke(); ctx.restore(); } }
-  if (e.winding && e.kind !== "archer") {                                      // attack warning: pulsing ring + !
+  if (e.winding && (e.kind === "archer" || e.kind === "hexer") && state) { const tg = state.players.filter(p => p.alive).sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y))[0]; if (tg) { ctx.save(); ctx.strokeStyle = e.kind === "hexer" ? "rgba(190,130,255,.6)" : "rgba(255,90,90,.55)"; ctx.lineWidth = 2; ctx.setLineDash([8, 6]); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(tg.x, tg.y); ctx.stroke(); ctx.restore(); } }
+  if (e.winding && e.kind !== "archer" && e.kind !== "hexer") {                                      // attack warning: pulsing ring + !
     const rg = (RANGE[e.kind] || 46) * (e.elite ? 1.5 : 1), pu = 0.7 + 0.3 * Math.sin(t * 0.03);
     ctx.fillStyle = "rgba(255,60,60,.16)"; ctx.beginPath(); ctx.arc(x, y, rg * pu, 0, 6.283); ctx.fill();
     ctx.strokeStyle = "rgba(255,90,90,.85)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, rg * pu, 0, 6.283); ctx.stroke();
@@ -1109,7 +1133,8 @@ function render(t) {
   }
   if (state) (state.shots || []).forEach(sh => {                                      // arrows and fireballs
     ctx.save(); ctx.translate(sh.x, sh.y);
-    if (sh.k === "fire") { const fg = ctx.createRadialGradient(0, 0, 1, 0, 0, 16); fg.addColorStop(0, "#fff3b0"); fg.addColorStop(0.4, "#ff9a3c"); fg.addColorStop(1, "rgba(255,60,20,0)"); ctx.fillStyle = fg; ctx.fillRect(-16, -16, 32, 32); if (Math.random() < 0.5) parts.push({ x: sh.x, y: sh.y, vx: rnd(-20, 20), vy: rnd(-20, 20), life: 300, max: 300, col: "#ff8a3c", size: 4, grav: 0 }); }
+    if (sh.k === "hex") { const hg = ctx.createRadialGradient(0, 0, 1, 0, 0, 14); hg.addColorStop(0, "#f3e6ff"); hg.addColorStop(0.35, "#b37cff"); hg.addColorStop(1, "rgba(120,60,220,0)"); ctx.fillStyle = hg; ctx.fillRect(-14, -14, 28, 28); ctx.rotate(sh.a); ctx.strokeStyle = "rgba(190,140,255,.55)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-5, 0); ctx.lineTo(-16, 0); ctx.stroke(); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(0, 0, 2.6, 0, 6.283); ctx.fill(); }
+    else if (sh.k === "fire") { const fg = ctx.createRadialGradient(0, 0, 1, 0, 0, 16); fg.addColorStop(0, "#fff3b0"); fg.addColorStop(0.4, "#ff9a3c"); fg.addColorStop(1, "rgba(255,60,20,0)"); ctx.fillStyle = fg; ctx.fillRect(-16, -16, 32, 32); if (Math.random() < 0.5) parts.push({ x: sh.x, y: sh.y, vx: rnd(-20, 20), vy: rnd(-20, 20), life: 300, max: 300, col: "#ff8a3c", size: 4, grav: 0 }); }
     else { ctx.rotate(sh.a); ctx.fillStyle = "#cfa86a"; ctx.fillRect(-10, -1, 18, 2); ctx.fillStyle = "#e8eef5"; ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(6, -4); ctx.lineTo(6, 4); ctx.fill(); ctx.fillStyle = "#e8402f"; ctx.fillRect(-12, -3, 4, 2); ctx.fillRect(-12, 1, 4, 2); }
     ctx.restore();
   });
@@ -1143,7 +1168,7 @@ function render(t) {
     if (state.doorOpen) light(dctx, 741, 260, 150, 0.95);
     state.enemies.filter(e => e.alive && e.keeper).forEach(e => { const r = rp.get(e.id); if (r) light(dctx, r.x, r.y, 90, 0.7); });
     (state.pickups || []).forEach(pk => light(dctx, pk.x, pk.y, 60, 0.8));
-    (state.shots || []).forEach(sh => { if (sh.k === "fire") light(dctx, sh.x, sh.y, 70, 0.8); });
+    (state.shots || []).forEach(sh => { if (sh.k === "fire") light(dctx, sh.x, sh.y, 70, 0.8); else if (sh.k === "hex") light(dctx, sh.x, sh.y, 46, 0.6); });
     state.enemies.filter(e => e.kind === "boss").forEach(e => { const r = rp.get(e.id); if (r) light(dctx, r.x, r.y, 190, 0.8); });
   }
   ctx.drawImage(dark, 0, 0);

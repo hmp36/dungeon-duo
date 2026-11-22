@@ -58,6 +58,7 @@ const MOB = {
   bat:      { hp: 1,  speed: 88, range: 40,  windup: 380, cooldown: 1700, dmg: 1, stop: 26, gold: 4 },
   brute:    { hp: 6,  speed: 30, range: 62,  windup: 650, cooldown: 1900, dmg: 2, stop: 46, gold: 12 },
   archer:   { hp: 2,  speed: 40, range: 0,   windup: 650, cooldown: 2300, dmg: 1, stop: 0,  gold: 6, ranged: true },
+  hexer:    { hp: 3,  speed: 36, range: 0,   windup: 800, cooldown: 2800, dmg: 1, stop: 0,  gold: 8, ranged: true },     // casts a fan of slow orbs that bog heroes down
   bomber:   { hp: 2,  speed: 78, range: 62,  windup: 750, cooldown: 1000, dmg: 1, stop: 18, gold: 6 },     // runs in, lights its fuse, blows up (hurts monsters too)
   mimic:    { hp: 4,  speed: 78, range: 46,  windup: 300, cooldown: 1100, dmg: 1, stop: 28, gold: 15 },
   warden:   { hp: 20, speed: 34, range: 80, windup: 700, cooldown: 1700, dmg: 2, stop: 58, gold: 40 },   // mini-boss (drawn as a big gold brute)
@@ -67,8 +68,8 @@ const defOf = e => (e.elite ? MOB.warden : MOB[e.kind]);
 const roomLayouts = [
   { name: "Forgotten Entrance", mobs: ["slime", "slime", "slime"], hearts: [[330, 450]], chests: [[700, 100], [120, 470]] },
   { name: "The Crypt", mobs: ["skeleton", "skeleton", "bat", "bat"], keeper: 0, shield: [1], hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]] },
-  { name: "Archer Gallery", mobs: ["archer", "archer", "skeleton", "bomber"], shield: [2], hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470], [710, 470]], mimics: 0.3 },
-  { name: "Treasure Chamber", mobs: ["brute", "skeleton", "archer", "bat", "bomber"], elite: 0, shield: [1], hearts: [[400, 440]], chests: [[60, 90], [140, 90], [660, 90], [740, 90], [60, 470], [740, 470]], mimics: 0.35 },
+  { name: "Archer Gallery", mobs: ["archer", "hexer", "skeleton", "bomber"], shield: [2], hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470], [710, 470]], mimics: 0.3 },
+  { name: "Treasure Chamber", mobs: ["brute", "skeleton", "hexer", "bat", "bomber"], elite: 0, shield: [1], hearts: [[400, 440]], chests: [[60, 90], [140, 90], [660, 90], [740, 90], [60, 470], [740, 470]], mimics: 0.35 },
   { name: "Dragon of Debt", mobs: ["boss"], hearts: [[300, 460], [500, 460]], chests: [] }
 ];
 const SPAWNS = [[90, 260], [145, 260]];
@@ -174,7 +175,7 @@ function publicState(room) {
     keyDrop: room.keyDrop,
     players: Object.values(room.players).map(p => ({
       id: p.id, name: p.name, slot: p.slot, cls: p.cls, x: p.x, y: p.y, hp: p.hp, cap: cap(p), alive: p.alive,
-      facing: p.facing, attacking: now < p.attackUntil, dashing: now < p.dashUntil,
+      slowed: now < (p.slowUntil || 0), facing: p.facing, attacking: now < p.attackUntil, dashing: now < p.dashUntil,
       noteCd: Math.max(0, Math.min(1, (p.lastNote + NOTE_COOLDOWN * cdm(p) - now) / (NOTE_COOLDOWN * cdm(p)))),
       specialCd: Math.max(0, Math.min(1, (p.lastSpecial + SPECIAL_COOLDOWN * cdm(p) - now) / (SPECIAL_COOLDOWN * cdm(p)))),
       playing: now < (p.noteUntil || 0), guard: now < (p.guardUntil || 0), up: p.up, inv: p.inv, equip: p.equip, atkKind: p.atkKind, st: gearStats(p),
@@ -461,6 +462,12 @@ io.on("connection", socket => {
     else notice(room, "Waiting for your teammate to press RETRY ROOM.");
     broadcast(room);
   });
+  // Quick team signals on keys 1-4: help, over here, nice, watch out.
+  socket.on("emote", k => {
+    const c = ctx(); if (!c) return; const { room, p, now } = c;
+    k = Number(k) | 0; if (k < 0 || k > 3 || now - (p.lastEmote || 0) < 900) return; p.lastEmote = now;
+    fx(room, "emote", { id: p.id, k, x: p.x, y: p.y });
+  });
   socket.on("rematch", () => {
     const room = rooms.get(socket.data.roomCode);
     if (!room || !room.players[socket.id] || !(room.finished || room.gameOver)) return;
@@ -573,7 +580,7 @@ function tick() {
       let dy = (p.input.down ? 1 : 0) - (p.input.up ? 1 : 0);
       if (dashing) [dx, dy] = p.dashDir;
       const mag = Math.hypot(dx, dy) || 1;
-      const speed = dashing ? 520 : 175 * (1 + 0.08 * (p.up.speed || 0) + gearStats(p).speed);
+      const speed = dashing ? 520 : 175 * (1 + 0.08 * (p.up.speed || 0) + gearStats(p).speed) * (now < (p.slowUntil || 0) ? 0.55 : 1);
       p.x = clampX(p.x + dx / mag * speed * dt);
       p.y = clampY(p.y + dy / mag * speed * dt);
       if (!dashing && (dx || dy)) p.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
@@ -615,7 +622,8 @@ function tick() {
             e.windupUntil = 0; e.nextAttackAt = now + def.cooldown * cdMul; e.retreatUntil = boss ? 0 : now + 650;
             if (def.ranged) {
               const v = room.players[e.windupTarget];
-              if (v) fireShot(room, e.x, e.y, Math.atan2(v.y - e.y, v.x - e.x), 260, def.dmg, "arrow");
+              if (v && e.kind === "hexer") { const ba = Math.atan2(v.y - e.y, v.x - e.x); for (const o of [-0.3, 0, 0.3]) fireShot(room, e.x, e.y, ba + o, 140, def.dmg, "hex"); fx(room, "hexcast", { x: e.x, y: e.y }); }
+              else if (v) fireShot(room, e.x, e.y, Math.atan2(v.y - e.y, v.x - e.x), 260, def.dmg, "arrow");
             } else if (e.kind === "bomber") {                  // BOOM: hurts heroes and any monsters caught in the blast
               const BR = 84; e.alive = false; fx(room, "boom", { x: e.x, y: e.y });
               alive.forEach(v => { if (v.alive && Math.hypot(v.x - e.x, v.y - e.y) < BR && now >= v.dashUntil && now - v.lastHit > HIT_INVULN) hurtPlayer(room, v, def.dmg, e, now); });
@@ -666,7 +674,7 @@ function tick() {
       s.life -= 50; s.x += s.vx * dt; s.y += s.vy * dt;
       if (s.life <= 0 || s.x < 18 || s.x > ROOM_W - 18 || s.y < 54 || s.y > ROOM_H - 18) return false;
       const hit = alive.find(p => Math.hypot(p.x - s.x, p.y - s.y) < 20 && now >= p.dashUntil && now - p.lastHit > HIT_INVULN);
-      if (hit) { hurtPlayer(room, hit, s.dmg, s, now); return false; }
+      if (hit) { hurtPlayer(room, hit, s.dmg, s, now); if (s.kind === "hex") { hit.slowUntil = now + 2400; fx(room, "slowed", { x: hit.x, y: hit.y }); } return false; }
       return true;
     });
 

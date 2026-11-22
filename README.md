@@ -74,3 +74,5 @@ This is a small V1 prototype, not a production-hardened game. It uses in-memory 
 - **Hit-stop**: crits, the ground pound and big kills freeze the action for a few frames.
 - **Bomber**: a fast imp carrying a lit bomb. It lights its fuse up close, then blows up in a ring that hurts heroes and any monsters nearby. Kill it first and it just fizzles. Shows up in the Archer Gallery and the Treasure Chamber.
 - **Volume**: separate music and effects sliders under the game (saved in the browser).
+- **Hexer**: a hooded caster who fires a fan of slow orbs. A hit slows that hero for a couple of seconds (SLOWED ring underfoot). Appears in the Archer Gallery and the Treasure Chamber.
+- **Team signals**: press 1-4 to call out HELP!, OVER HERE!, NICE! or WATCH OUT! above your hero.
