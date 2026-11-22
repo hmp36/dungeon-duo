@@ -62,6 +62,15 @@ const muteBtn = $("muteBtn");
 function paintMute() { muteBtn.textContent = muted ? "SOUND: OFF" : "SOUND: ON"; }
 muteBtn.onclick = () => { muted = !muted; try { localStorage.setItem("dd_muted", muted ? "1" : "0"); } catch (e) {} paintMute(); if (!muted) sfx.heal(); };
 paintMute();
+const fsEl = $("game"), fsOk = !!(fsEl.requestFullscreen || fsEl.webkitRequestFullscreen);
+function toggleFs() {
+  const on = document.fullscreenElement || document.webkitFullscreenElement;
+  if (on) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  else (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen).call(fsEl);
+}
+if (!fsOk) $("fsBtn").classList.add("hidden"); else $("fsBtn").onclick = toggleFs;
+function fsLabel() { $("fsBtn").textContent = (document.fullscreenElement || document.webkitFullscreenElement) ? "EXIT FULLSCREEN" : "FULLSCREEN"; }
+document.addEventListener("fullscreenchange", fsLabel); document.addEventListener("webkitfullscreenchange", fsLabel);
 
 /* ------------------------------------------------------------------ lobby / network */
 function showError(msg) { $("lobbyError").textContent = msg || ""; }
@@ -200,6 +209,7 @@ window.addEventListener("keydown", e => {
   if (k === " ") { if (!e.repeat) socket.emit("attack"); return; }
   if (k === "shift" || k === "e") { if (!e.repeat) doDash(); return; }
   if (k === "q" || k === "f") { if (!e.repeat) socket.emit("note"); return; }
+  if (k === "g" && !e.repeat && fsOk) { toggleFs(); return; }
   if (k === "r") { if (!e.repeat) socket.emit("special"); return; }
   if (k === "w" || k === "arrowup") keys.up = true;
   if (k === "s" || k === "arrowdown") keys.down = true;
