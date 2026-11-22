@@ -10,20 +10,16 @@ Hosted on Render's free tier, so the first visit after a quiet period can take u
 
 ## How to play
 
-1. Open the live link in two separate browsers or devices.
-2. Player 1 enters a hero name and selects **Create a Room**.
-3. Share the six-character room code with Player 2.
-4. Player 2 enters the same code and selects **Join Room**.
-5. Move with **WASD** or the **arrow keys**. **Space** smashes your guitar over enemies' heads (2 damage, big arc). **Q** plays a riff: music notes stun every monster in front of you for about 1 second (4 second cooldown). **Shift** dashes: a quick burst with brief invulnerability.
-6. Red rings and a "!" mean a monster is winding up a hit. Step back or dash out.
-7. Defeat all monsters to open the route forward. Monsters sleep until a teammate joins; use **Play solo** to test alone.
-8. In **Room 2 (The Crypt)** the glowing **Keeper** skeleton carries the dungeon key. Defeat him, then grab the key from the floor.
-9. Carry the key into **Room 3**. Clear the monsters, then have every living player stand by the exit on the right.
-10. You win when all surviving players escape.
-
-Each player starts with **5 hearts** and can grow to 7 by picking up hearts. Walk over hearts to pick them up: one is placed in every room and monsters often drop more. At zero hearts a hero falls, but a teammate can **revive** them by standing next to them for about 2 seconds. The team loses if everyone is down.
-
-Monsters: slimes, skeletons, fast erratic bats, and a heavy-hitting brute. Sound effects are built in (toggle with the Sound button).
+1. Open the live link, pick a hero (**Troubadour** or **Knight**), and **Create a Room**. Share the six-character code, or tick **Daily Dungeon** for today's shared loot layout.
+2. Your friend picks a hero and joins with the code. Monsters sleep until a teammate joins; **Play solo** starts alone.
+3. **Move** WASD/arrows. **Attack** Space. **Ability** Q. **Special** R. **Dash** Shift. On phones use the on-screen buttons.
+   - Troubadour: guitar smash (2 dmg), riff that stuns a cone of monsters, healing song.
+   - Knight: wide sword slash, shield bash (knockback and stun), guard (brief immunity).
+4. Red rings and "!" warn that a monster is about to hit. Archers show a dashed aim line.
+5. Five rooms: Forgotten Entrance, The Crypt (the glowing Keeper carries the key), Archer Gallery, Treasure Chamber, and the **Dragon of Debt** boss (three phases).
+6. Smash chests for gold or hearts (some are mimics). Spend gold at rest stops between rooms: heal, heart containers, faster ability recharge, boots, damage.
+7. Each hero has 5 hearts (up to 7 with pickups). Stand next to a fallen hero for about 2 seconds to revive them.
+8. Win by getting every living hero out of the final room. You get a score screen and a leaderboard entry.
 
 ## Run locally
 
@@ -49,11 +45,10 @@ The server serves the browser client and Socket.IO from the same origin, so no s
 
 ## Features
 
-- Room-code creation and joining for up to two players, plus solo mode.
-- Server-authoritative movement, combat, enemy AI, health, revive, key and room progression.
-- Three themed rooms with torch lighting, animated sprites, particles, screen shake and WebAudio sound.
-- Attack telegraphs, knockback, hit invulnerability, dash and heart pickups.
-- On-screen touch controls (d-pad, attack, dash), team health, enemy count and win/loss overlays.
+- Server-authoritative Socket.IO game, vanilla Canvas client with no build step.
+- Two classes, ranged and mimic enemies, a three-phase boss, shop, score screen, top-10 leaderboard (best effort file storage; resets if the host disk resets) and a Daily Dungeon seed.
+- Torch lighting, particles, screen shake, WebAudio sound effects and chiptune music (mute button).
+- Title screen with how-to modal; touch controls for phones.
 
 ## Notes
 

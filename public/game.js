@@ -70,6 +70,9 @@ function enterRoom(result) {
   $("codeLabel").textContent = roomCode; $("roomLabel").textContent = "1 / 5";
   lobby.classList.add("hidden"); game.classList.remove("hidden"); showError("");
 }
+$("playBtn").onclick = () => { audio(); $("title").classList.add("hidden"); lobby.classList.remove("hidden"); };
+$("howBtn").onclick = () => $("howto").classList.remove("hidden");
+$("howClose").onclick = () => $("howto").classList.add("hidden");
 let myCls = "bard";
 const CLS_DESC = { bard: "Guitar smash (2 dmg). Q: riff stuns monsters in a cone. R: healing song for nearby heroes.", knight: "Wide sword slash. Q: shield bash knocks enemies back and stuns. R: guard, brief damage immunity." };
 function pickCls(c) { myCls = c; document.querySelectorAll(".cls").forEach(b => b.classList.toggle("on", b.dataset.cls === c)); $("clsDesc").textContent = CLS_DESC[c]; }
@@ -105,8 +108,11 @@ socket.on("state", s => {
 });
 socket.on("fx", handleFx);
 
+let lastCls = "";
 function updateHud() {
   if (!state) return;
+  const meP = state.players.find(p => p.id === myId);
+  if (meP && meP.cls !== lastCls) { lastCls = meP.cls; $("noteBtn").textContent = meP.cls === "knight" ? "BASH" : "RIFF"; $("spBtn").textContent = meP.cls === "knight" ? "GUARD" : "HEAL"; }
   $("roomLabel").textContent = `${state.stage + 1} / 5 — ${roomNames[state.stage]}`;
   const ps = state.players;
   $("healthLabel").textContent = ps.map(p => `${p.name}: ${"❤️".repeat(p.hp)}${"🖤".repeat(Math.max(0, p.cap - p.hp))}${p.alive ? "" : " DOWN"}`).join("　");

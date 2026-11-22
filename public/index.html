@@ -9,7 +9,18 @@
 <body>
   <main class="shell">
     <header class="topbar"><div class="brand">⚔ DUNGEON <span>DUO</span></div><div class="tag">TWO HEROES. ONE WAY OUT.</div></header>
-    <section id="lobby" class="panel lobby">
+    <section id="title" class="title">
+      <div class="slides"><img src="img/entrance.jpg" alt="Entrance"><img src="img/crypt.jpg" alt="Crypt"><img src="img/treasure.jpg" alt="Treasure Chamber"><img src="img/boss.jpg" alt="Dragon of Debt"></div>
+      <div class="titlecard"><div class="eyebrow">A CO-OP PIXEL ADVENTURE FOR TWO</div><h1>DUNGEON <em>DUO</em></h1><p>Pick a Troubadour or a Knight. Fight through five rooms, steal the key from the Keeper, and take down the Dragon of Debt together.</p>
+        <div class="titlebtns"><button id="playBtn" class="primary">PLAY</button><button id="howBtn" class="secondary">HOW TO PLAY</button></div>
+        <div class="feat"><span>5 rooms</span><span>2 heroes</span><span>boss fight</span><span>daily dungeon</span><span>works on phones</span></div></div>
+    </section>
+    <div id="howto" class="modal hidden"><div class="modalbox"><button id="howClose" class="secondary closebtn">CLOSE</button><h2>HOW TO PLAY</h2>
+      <div class="how2"><div><h3>CONTROLS</h3><p><b>Move</b> WASD or arrows<br><b>Attack</b> Space<br><b>Ability</b> Q (riff stun or shield bash)<br><b>Special</b> R (heal song or guard)<br><b>Dash</b> Shift (brief invulnerability)<br>On a phone, use the on-screen buttons.</p>
+      <h3>GOAL</h3><p>Clear each room, get the key from the Keeper in the Crypt, then reach the exit together. Smash chests for gold (beware of mimics), spend it at rest stops, and beat the dragon.</p>
+      <h3>TIPS</h3><p>Red rings mean a hit is coming. Stand next to a fallen friend to revive them. Hearts can lift you above your starting 5.</p></div>
+      <div class="shots"><img src="img/entrance.jpg" alt=""><img src="img/crypt.jpg" alt=""><img src="img/treasure.jpg" alt=""><img src="img/boss.jpg" alt=""></div></div></div></div>
+    <section id="lobby" class="panel lobby hidden">
       <div class="intro"><div class="eyebrow">CO-OP PIXEL ADVENTURE</div><h1>Enter the dungeon.<br><em>Escape together.</em></h1><p>Team up with a friend, clear five rooms, beat the Keeper for the key in the Crypt, and get every surviving hero to the exit.</p><div id="boardBox" class="board"></div></div>
       <div class="joinbox"><label for="playerName">HERO NAME</label><input id="playerName" maxlength="18" placeholder="Your name" value="Hero">
         <label>CHOOSE YOUR HERO</label>
