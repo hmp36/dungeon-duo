@@ -61,3 +61,11 @@ This is a small V1 prototype, not a production-hardened game. It uses in-memory 
 ## Visuals
 - Renders at 2x resolution with rim lighting, soft outlines, contact shadows, light shafts, two-level bloom and film grain.
 - Class select shows animated previews of each hero.
+
+## Run options
+- **Difficulty** (chosen by whoever creates the room): Easy (7 hearts, monsters about 30% softer, score x0.8), Normal, Hard (4 hearts, monsters about 35% tougher, score x1.25).
+- **Pause**: press P (or the PAUSE button). Either hero can pause for both; timers are shifted on resume so nothing catches up.
+- **Play again**: after a win or a defeat, both heroes press PLAY AGAIN to restart the same room with the same difficulty (solo restarts immediately).
+- **Iron Warden**: a mini-boss in the Treasure Chamber with a shockwave ring every other swing. Drops gear for both heroes.
+- **Share preview**: Open Graph and Twitter tags with `public/img/og.jpg` (1200x630).
+- The connection banner explains the free-tier cold start ("Waking the dungeon...") and Create/Join stay disabled until the socket connects.

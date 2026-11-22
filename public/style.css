@@ -28,3 +28,10 @@
 .touchpad .gearb{background:#7fd6a5;color:#08261a}.touchpad .gearb:active{background:#b5f0cf}
 @media(pointer:coarse){.touchpad .btns{grid-template-columns:repeat(3,auto)}}
 .cls{display:flex;flex-direction:column;align-items:center;gap:8px}.cls .pv{width:100%;max-width:190px;aspect-ratio:4/5;height:auto;border-radius:10px;display:block;transition:filter .2s}.cls:not(.on) .pv{filter:saturate(.55) brightness(.7)}
+
+.diffpick{display:flex;gap:8px}.dbtn{flex:1;background:#252e40;color:#cfd6e4;font-size:9px;padding:11px 6px;border:2px solid transparent}.dbtn.on{border-color:var(--gold);background:#34445f;color:#fff}
+.conn{position:fixed;left:0;right:0;top:0;z-index:60;background:#4a3510;color:#ffe08a;text-align:center;padding:12px 14px;font:10px/1.7 'Press Start 2P';border-bottom:2px solid #c9a24d}
+.conn:before{content:"";display:inline-block;width:10px;height:10px;margin-right:10px;border:2px solid #ffe08a;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-1px}
+@keyframes spin{to{transform:rotate(360deg)}}
+button:disabled{opacity:.5;cursor:not-allowed;transform:none!important;filter:none!important}
+.overlay .primary+.secondary{margin-top:10px}

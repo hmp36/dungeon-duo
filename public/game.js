@@ -88,7 +88,12 @@ const CLS_DESC = { bard: "Guitar smash (2 dmg). Q: riff stuns monsters in a cone
 function pickCls(c) { myCls = c; document.querySelectorAll(".cls").forEach(b => b.classList.toggle("on", b.dataset.cls === c)); $("clsDesc").textContent = CLS_DESC[c]; }
 document.querySelectorAll(".cls").forEach(b => b.onclick = () => pickCls(b.dataset.cls));
 pickCls("bard");
-$("createBtn").onclick = () => { audio(); socket.emit("createRoom", { name: $("playerName").value.trim() || "Hero", cls: myCls, daily: $("dailyChk").checked }, enterRoom); };
+let myDiff = "normal";
+const DIFF_DESC = { easy: "7 hearts to start, monsters have about 30% less health. Score x0.8.", normal: "5 hearts to start. The intended challenge.", hard: "4 hearts to start, monsters have about 35% more health. Score x1.25." };
+function pickDiff(d) { myDiff = d; document.querySelectorAll(".dbtn").forEach(b => b.classList.toggle("on", b.dataset.d === d)); $("diffDesc").textContent = DIFF_DESC[d]; }
+document.querySelectorAll(".dbtn").forEach(b => b.onclick = () => pickDiff(b.dataset.d));
+pickDiff("normal");
+$("createBtn").onclick = () => { audio(); socket.emit("createRoom", { name: $("playerName").value.trim() || "Hero", cls: myCls, daily: $("dailyChk").checked, diff: myDiff }, enterRoom); };
 function loadBoard() {
   Promise.all([fetch("/api/leaderboard?daily=1").then(r => r.json()), fetch("/api/leaderboard").then(r => r.json())]).then(([d, a]) => {
     const list = (title, arr) => `<h3>${title}</h3>` + (arr.length ? "<ol>" + arr.slice(0, 5).map(b => `<li>${b.names} — ${b.score} pts (${b.time}s)</li>`).join("") + "</ol>" : '<div class="empty">No runs yet. Be the first!</div>');
@@ -99,8 +104,27 @@ loadBoard();
 $("joinBtn").onclick = () => { audio(); socket.emit("joinRoom", { name: $("playerName").value.trim() || "Hero", cls: myCls, code: $("roomCode").value }, enterRoom); };
 $("copyBtn").onclick = () => navigator.clipboard?.writeText(roomCode).then(() => $("copyBtn").textContent = "COPIED");
 $("againBtn").onclick = () => location.reload();
+let iVoted = false;
+$("rematchBtn").onclick = () => { iVoted = true; $("rematchBtn").disabled = true; socket.emit("rematch"); };
+const canPause = () => state && !state.waiting && !state.finished && !state.gameOver && !state.shop && !game.classList.contains("hidden");
+function togglePause() { if (canPause()) socket.emit("pause"); }
+$("pauseBtn").onclick = togglePause; $("resumeBtn").onclick = togglePause;
 $("soloBtn").onclick = () => socket.emit("startSolo");
-socket.on("connect_error", () => $("status").textContent = "Connection problem. Refresh and try again.");
+// Free hosting naps when idle, so the first connection can take a while. Say so instead of looking broken.
+const connEl = $("conn"); let connTimer = null, everConnected = false;
+function setNetUi(ok) {
+  $("createBtn").disabled = !ok; $("joinBtn").disabled = !ok;
+  clearTimeout(connTimer);
+  if (ok) { connEl.classList.add("hidden"); return; }
+  connTimer = setTimeout(() => {
+    connEl.textContent = everConnected ? "Connection lost. Reconnecting..." : "Waking the dungeon... the server naps when idle, so this can take up to a minute.";
+    connEl.classList.remove("hidden");
+  }, everConnected ? 600 : 1200);
+}
+setNetUi(false);
+socket.on("connect", () => { everConnected = true; setNetUi(true); });
+socket.on("disconnect", () => setNetUi(false));
+socket.on("connect_error", () => setNetUi(false));
 socket.on("notice", msg => $("status").textContent = msg);
 
 let lastStage = -1, windSeen = new Set(), lastWindSfx = 0;
@@ -137,13 +161,22 @@ function checkOverlay() {
   if (state.finished && state.result) {
     const r = state.result, mm = Math.floor(r.time / 60), ss = String(r.time % 60).padStart(2, "0");
     $("overlayTitle").textContent = "DUNGEON CLEARED!"; $("overlayText").textContent = r.daily ? "Daily Dungeon " + r.daily : "The team made it out. Excellent teamwork!";
-    rb.innerHTML = `<div class="result"><div class="big">${r.score} PTS</div><div>Time ${mm}:${ss} • Gold ${r.gold} • Kills ${r.kills} • Falls ${r.downs}</div>
+    rb.innerHTML = `<div class="result"><div class="big">${r.score} PTS</div><div>${r.diff && r.diff !== "Normal" ? r.diff + " • " : ""}Time ${mm}:${ss} • Gold ${r.gold} • Kills ${r.kills} • Falls ${r.downs}</div>
       <table><tr><th>HERO</th><th>KILLS</th><th>CHESTS</th><th>REVIVES</th><th>HEARTS</th></tr>${r.players.map(p => `<tr><td>${p.cls === "knight" ? "🛡" : "🎸"} ${p.name}</td><td>${p.kills}</td><td>${p.chests}</td><td>${p.revives}</td><td>${p.hearts}</td></tr>`).join("")}</table>
       <div class="eyebrow">${r.daily ? "TODAY'S DAILY LEADERBOARD" : "TOP RUNS"}</div><ol>${r.top.map(b => `<li>${b.names} — ${b.score} pts (${b.time}s)</li>`).join("")}</ol></div>`;
     $("overlay").classList.remove("hidden");
   } else if (state.finished) { $("overlayTitle").textContent = "DUNGEON CLEARED!"; $("overlayText").textContent = ""; $("overlay").classList.remove("hidden"); }
   else if (state.gameOver) { $("overlayTitle").textContent = "TEAM DEFEATED"; $("overlayText").textContent = "Every hero has fallen. The dungeon wins this time."; $("overlay").classList.remove("hidden"); }
   else $("overlay").classList.add("hidden");
+  // play again: shows who is ready; re-arms itself once the new run starts
+  const ended = state.finished || state.gameOver, rb2 = $("rematchBtn");
+  if (ended) {
+    rb2.disabled = iVoted;
+    rb2.textContent = iVoted && state.needRematch > 1 ? `WAITING FOR TEAMMATE (${state.rematch}/${state.needRematch})` : state.rematch > 0 && state.needRematch > 1 ? `PLAY AGAIN (${state.rematch}/${state.needRematch} ready)` : "PLAY AGAIN";
+  } else { iVoted = false; rb2.disabled = false; }
+  const pv = $("pauseOv");
+  if (state.paused && !ended) { $("pauseText").textContent = `${state.pausedBy || "A hero"} paused the game. Press P or RESUME to continue.`; pv.classList.remove("hidden"); } else pv.classList.add("hidden");
+  $("pauseBtn").textContent = state.paused ? "RESUME (P)" : "PAUSE (P)";
 }
 
 /* ------------------------------------------------------------------ gear */
@@ -315,6 +348,7 @@ window.addEventListener("keydown", e => {
   if (k === "q" || k === "f") { if (!e.repeat) socket.emit("note"); return; }
   if (k === "g" && !e.repeat && fsOk) { toggleFs(); return; }
   if (k === "i" && !e.repeat) { toggleGear(); return; }
+  if (k === "p" && !e.repeat && !(e.target && e.target.tagName === "INPUT")) { togglePause(); return; }
   if (k === "r") { if (!e.repeat) socket.emit("special"); return; }
   if (k === "w" || k === "arrowup") keys.up = true;
   if (k === "s" || k === "arrowdown") keys.down = true;
@@ -722,6 +756,7 @@ function tint(base, e, t) { return e.hurt ? "#ffffff" : (e.winding && Math.floor
 function drawEnemy(e, r, t, faceX) {
   const x = Math.round(r.x), y = Math.round(r.y), ph = (e.id.length * 1.7) % 6, dir = faceX >= 0 ? 1 : -1;
   if (e.keeper) { const gl = ctx.createRadialGradient(x, y, 4, x, y, 52); gl.addColorStop(0, "rgba(255,216,107,.55)"); gl.addColorStop(1, "rgba(255,216,107,0)"); ctx.fillStyle = gl; ctx.fillRect(x - 55, y - 55, 110, 110); }
+  if (e.elite) { const eg = ctx.createRadialGradient(x, y, 6, x, y, 74); eg.addColorStop(0, "rgba(255,200,70,.42)"); eg.addColorStop(1, "rgba(255,200,70,0)"); ctx.fillStyle = eg; ctx.fillRect(x - 76, y - 76, 152, 152); }
   beginSprite(x, y); if (e.dormant) spA = 0.6;
   if (e.kind === "slime") {
     shadow(x, y + 13, 16);
@@ -834,20 +869,22 @@ function drawEnemy(e, r, t, faceX) {
     ctx.beginPath(); ctx.moveTo(x + 8, y - 34); ctx.quadraticCurveTo(x + 17, y - 38, x + 17, y - 48); ctx.quadraticCurveTo(x + 11, y - 42, x + 4, y - 36); ctx.fill();
     ball(x + 1, y - 27, 3, "#ffe58a"); ball(x + 9, y - 27, 3, "#ffe58a"); ball(x + 2, y - 27, 1.4, "#222"); ball(x + 10, y - 27, 1.4, "#222");
     ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.moveTo(x + 4, y - 18); ctx.lineTo(x + 6, y - 13); ctx.lineTo(x + 8, y - 18); ctx.fill(); ctx.beginPath(); ctx.moveTo(x + 11, y - 18); ctx.lineTo(x + 13, y - 13); ctx.lineTo(x + 14, y - 18); ctx.fill();
+    if (e.elite) { ctx.fillStyle = "#e9b93c"; ctx.beginPath(); ctx.moveTo(x - 7, y - 36); ctx.lineTo(x - 8, y - 47); ctx.lineTo(x - 3, y - 41); ctx.lineTo(x + 3, y - 50); ctx.lineTo(x + 9, y - 41); ctx.lineTo(x + 14, y - 47); ctx.lineTo(x + 13, y - 36); ctx.closePath(); ctx.fill(); ctx.strokeStyle = "#8a6414"; ctx.lineWidth = 1.2; ctx.stroke(); ball(x + 3, y - 44, 1.8, "#ff5a5a"); }
     ctx.restore();
   }
-  endSprite(e.winding ? 1 + 0.08 * (0.5 + 0.5 * Math.sin(t * 0.03)) : 1 + Math.sin(t * 0.006 + ph) * 0.015, 1, e.kind === "boss" ? 84 : e.kind === "brute" ? 52 : 36);
-  const top = e.kind === "boss" ? 96 : e.kind === "brute" ? 54 : e.kind === "bat" ? 30 : e.kind === "mimic" ? 30 : 34;
+  endSprite((e.winding ? 1 + 0.08 * (0.5 + 0.5 * Math.sin(t * 0.03)) : 1 + Math.sin(t * 0.006 + ph) * 0.015) * (e.elite ? 1.5 : 1), 1, e.kind === "boss" ? 84 : e.kind === "brute" ? 52 : 36);
+  const top = e.kind === "boss" ? 96 : e.elite ? 86 : e.kind === "brute" ? 54 : e.kind === "bat" ? 30 : e.kind === "mimic" ? 30 : 34;
   if (e.keeper) { keyIcon(x - 10, y - top - 8 + Math.sin(t * 0.006) * 3, 0.9); }
   if (e.dormant) { ctx.fillStyle = "#cfe3ff"; ctx.font = "bold 13px sans-serif"; ctx.textAlign = "center"; ctx.fillText("z", x + 12, y - top + Math.sin(t * 0.004) * 3); ctx.fillText("Z", x + 20, y - top - 8 + Math.sin(t * 0.004 + 1) * 3); }
   if ((e.hp < e.maxHp || e.kind === "brute") && e.kind !== "boss") {
-    const bw = e.kind === "brute" ? 44 : 30, by = y - top - (e.keeper ? 22 : 8);
-    px(x - bw / 2 - 1, by - 1, bw + 2, 6, "#0c0e14"); px(x - bw / 2, by, bw, 4, "#3a1f26"); px(x - bw / 2, by, bw * Math.max(0, e.hp / e.maxHp), 4, "#e66c75");
+    const bw = e.elite ? 72 : e.kind === "brute" ? 44 : 30, by = y - top - (e.keeper ? 22 : 8);
+    px(x - bw / 2 - 1, by - 1, bw + 2, 6, "#0c0e14"); px(x - bw / 2, by, bw, 4, "#3a1f26"); px(x - bw / 2, by, bw * Math.max(0, e.hp / e.maxHp), 4, e.elite ? "#f0c24a" : "#e66c75");
+    if (e.elite) { ctx.fillStyle = "#ffe08a"; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "center"; ctx.fillText("IRON WARDEN", x, by - 5); }
   }
   if (e.stunned && !e.dormant) { for (let i = 0; i < 3; i++) { const a = t * 0.008 + i * 2.09; ctx.fillStyle = "#ffe08a"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center"; ctx.fillText("★", x + Math.cos(a) * 16, y - top - 6 + Math.sin(a) * 4); } }
   if (e.winding && e.kind === "archer" && state) { const tg = state.players.filter(p => p.alive).sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y))[0]; if (tg) { ctx.save(); ctx.strokeStyle = "rgba(255,90,90,.55)"; ctx.lineWidth = 2; ctx.setLineDash([8, 6]); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(tg.x, tg.y); ctx.stroke(); ctx.restore(); } }
   if (e.winding && e.kind !== "archer") {                                      // attack warning: pulsing ring + !
-    const rg = RANGE[e.kind] || 46, pu = 0.7 + 0.3 * Math.sin(t * 0.03);
+    const rg = (RANGE[e.kind] || 46) * (e.elite ? 1.5 : 1), pu = 0.7 + 0.3 * Math.sin(t * 0.03);
     ctx.fillStyle = "rgba(255,60,60,.16)"; ctx.beginPath(); ctx.arc(x, y, rg * pu, 0, 6.283); ctx.fill();
     ctx.strokeStyle = "rgba(255,90,90,.85)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, rg * pu, 0, 6.283); ctx.stroke();
     ctx.fillStyle = "#ff5a5a"; ctx.font = "bold 22px sans-serif"; ctx.textAlign = "center"; ctx.fillText("!", x, y - top - 14);

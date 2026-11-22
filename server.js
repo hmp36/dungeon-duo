@@ -30,7 +30,13 @@ app.get("/api/leaderboard", (req, res) => res.json({ daily: dailyKey(), top: top
 /* ------------------------------------------------------------------ constants */
 const rooms = new Map();
 const ROOM_W = 800, ROOM_H = 520;
-const START_HP = 5, MAX_HP = 7;          // heroes start with 5; hearts can top you up to 7 (+ shop containers)
+const START_HP = 5, MAX_HP = 7;
+const DIFFS = {                                // difficulty: start hearts, enemy health multiplier, score multiplier
+  easy:   { start: 7, hp: 0.7,  score: 0.8,  label: "Easy" },
+  normal: { start: 5, hp: 1,    score: 1,    label: "Normal" },
+  hard:   { start: 4, hp: 1.35, score: 1.25, label: "Hard" }
+};
+const cleanDiff = d => (DIFFS[d] ? d : "normal");          // heroes start with 5; hearts can top you up to 7 (+ shop containers)
 const REVIVE_TIME = 2.2;
 const HIT_INVULN = 1100;
 const DASH_MS = 170, DASH_COOLDOWN = 1100;
@@ -53,13 +59,15 @@ const MOB = {
   brute:    { hp: 6,  speed: 30, range: 62,  windup: 650, cooldown: 1900, dmg: 2, stop: 46, gold: 12 },
   archer:   { hp: 2,  speed: 40, range: 0,   windup: 650, cooldown: 2300, dmg: 1, stop: 0,  gold: 6, ranged: true },
   mimic:    { hp: 4,  speed: 78, range: 46,  windup: 300, cooldown: 1100, dmg: 1, stop: 28, gold: 15 },
+  warden:   { hp: 20, speed: 34, range: 80, windup: 700, cooldown: 1700, dmg: 2, stop: 58, gold: 40 },   // mini-boss (drawn as a big gold brute)
   boss:     { hp: 56, speed: 36, range: 108, windup: 900, cooldown: 2300, dmg: 2, stop: 80, gold: 100 }
 };
+const defOf = e => (e.elite ? MOB.warden : MOB[e.kind]);
 const roomLayouts = [
   { name: "Forgotten Entrance", mobs: ["slime", "slime", "slime"], hearts: [[330, 450]], chests: [[700, 100], [120, 470]] },
   { name: "The Crypt", mobs: ["skeleton", "skeleton", "bat", "bat"], keeper: 0, hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]] },
   { name: "Archer Gallery", mobs: ["archer", "archer", "skeleton", "bat"], hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470], [710, 470]], mimics: 0.3 },
-  { name: "Treasure Chamber", mobs: ["brute", "skeleton", "archer", "bat"], hearts: [[400, 440]], chests: [[60, 90], [140, 90], [660, 90], [740, 90], [60, 470], [740, 470]], mimics: 0.35 },
+  { name: "Treasure Chamber", mobs: ["brute", "skeleton", "archer", "bat"], elite: 0, hearts: [[400, 440]], chests: [[60, 90], [140, 90], [660, 90], [740, 90], [60, 470], [740, 470]], mimics: 0.35 },
   { name: "Dragon of Debt", mobs: ["boss"], hearts: [[300, 460], [500, 460]], chests: [] }
 ];
 const SPAWNS = [[90, 260], [145, 260]];
@@ -75,31 +83,34 @@ const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 function makeCode() { let c = ""; for (let i = 0; i < 6; i++) c += CODE_CHARS[crypto.randomInt(CODE_CHARS.length)]; return c; }
 
 /* ------------------------------------------------------------------ rooms */
-function makeRoom(code, daily) {
+function makeRoom(code, daily, diff) {
   const seed = daily ? parseInt(dailyKey().replace(/-/g, ""), 10) : 0;
   return {
     code, players: {}, stage: 0, key: false, keyDrop: null, finished: false, gameOver: false,
     started: false, doorWas: false, enemies: [], pickups: [], chests: [], shots: [], gold: 0,
     shop: null, daily: daily ? dailyKey() : null, rng: daily ? mulberry(seed) : null,
-    runStart: 0, runEnd: 0, result: null, lockedNoticed: false
+    runStart: 0, runEnd: 0, result: null, lockedNoticed: false,
+    diff: "normal", paused: false, pausedAt: 0, pausedBy: "", rematch: new Set()
   };
 }
 let eid = 0;
 function newEnemy(room, kind, x, y, extra = {}) {
+  const base = extra.elite ? MOB.warden.hp : MOB[kind].hp;
+  const hp = Math.max(1, Math.round(base * (room ? DIFFS[room.diff].hp : 1)));
   return Object.assign({
-    id: `e${++eid}`, kind, x, y, hp: MOB[kind].hp, maxHp: MOB[kind].hp, alive: true, keeper: false,
+    id: `e${++eid}`, kind, x, y, hp, maxHp: hp, alive: true, keeper: false,
     activeAt: Date.now() + 500, windupUntil: 0, windupTarget: null, nextAttackAt: 0, retreatUntil: 0,
     stunUntil: 0, hitUntil: 0, phase: Math.random() * 6.28, castUntil: 0, nextSpecialAt: Date.now() + 4000, phaseN: 1
   }, extra);
 }
-function makeEnemies(stage, graceMs) {
+function makeEnemies(stage, graceMs, room) {
   const layout = roomLayouts[stage], now = Date.now();
-  if (layout.mobs[0] === "boss") return [newEnemy(null, "boss", 600, 240, { activeAt: now + graceMs + 800 })];
-  return layout.mobs.map((kind, i) => newEnemy(null, kind, 430 + (i % 2) * 105, 115 + Math.floor(i / 2) * 155,
-    { keeper: layout.keeper === i, activeAt: now + graceMs }));
+  if (layout.mobs[0] === "boss") return [newEnemy(room, "boss", 600, 240, { activeAt: now + graceMs + 800 })];
+  return layout.mobs.map((kind, i) => newEnemy(room, kind, 430 + (i % 2) * 105, 115 + Math.floor(i / 2) * 155,
+    { keeper: layout.keeper === i, elite: layout.elite === i, activeAt: now + graceMs }));
 }
 function initStage(room) {
-  room.enemies = makeEnemies(room.stage, 1600);
+  room.enemies = makeEnemies(room.stage, 1600, room);
   room.shots = [];
   const layout = roomLayouts[room.stage];
   room.pickups = layout.hearts.map(([x, y], i) => ({ id: `h${room.stage}-${i}`, x, y }));
@@ -157,7 +168,8 @@ function publicState(room) {
   const alive = e => e.alive;
   return {
     code: room.code, stage: room.stage, key: room.key, finished: room.finished, gameOver: room.gameOver,
-    waiting: !room.started, daily: room.daily, lastStage: LAST_STAGE, roomName: roomLayouts[room.stage].name,
+    waiting: !room.started, daily: room.daily, diff: room.diff, paused: room.paused, pausedBy: room.pausedBy,
+    rematch: room.rematch.size, needRematch: Object.keys(room.players).length, lastStage: LAST_STAGE, roomName: roomLayouts[room.stage].name,
     keyDrop: room.keyDrop,
     players: Object.values(room.players).map(p => ({
       id: p.id, name: p.name, slot: p.slot, cls: p.cls, x: p.x, y: p.y, hp: p.hp, cap: cap(p), alive: p.alive,
@@ -172,7 +184,7 @@ function publicState(room) {
       id: e.id, kind: e.kind, x: e.x, y: e.y, hp: e.hp, maxHp: e.maxHp, alive: true,
       keeper: e.keeper && !room.key && !room.keyDrop, hurt: now < e.hitUntil, stunned: now < e.stunUntil,
       winding: e.windupUntil > now || e.castUntil > now, dormant: now < e.activeAt || !room.started,
-      phase: e.phaseN
+      phase: e.phaseN, elite: !!e.elite
     })),
     shots: room.shots.map(s => ({ x: Math.round(s.x), y: Math.round(s.y), a: Math.atan2(s.vy, s.vx), k: s.kind })),
     pickups: room.pickups, chests: room.chests.map(c => ({ id: c.id, x: c.x, y: c.y, open: c.open })), gold: room.gold,
@@ -186,12 +198,18 @@ function broadcast(room) { io.to(room.code).emit("state", publicState(room)); }
 function fx(room, type, data = {}) { io.to(room.code).emit("fx", { type, ...data }); }
 function notice(room, msg) { io.to(room.code).emit("notice", msg); }
 
+function shiftTimers(room, d) {
+  if (d <= 0) return;
+  ["activeAt", "windupUntil", "nextAttackAt", "retreatUntil", "stunUntil", "hitUntil", "castUntil", "nextSpecialAt"].forEach(k => room.enemies.forEach(e => { if (e[k]) e[k] += d; }));
+  ["attackUntil", "dashUntil", "lastHit", "lastNote", "lastSpecial", "lastDash", "noteUntil", "guardUntil", "nextAttackAt", "comboAt"].forEach(k => Object.values(room.players).forEach(p => { if (p[k]) p[k] += d; }));
+  if (room.runStart) room.runStart += d;
+}
 function resetRoom(room) {
   room.stage = 0; room.gold = 0; room.key = false; room.keyDrop = null; room.finished = false; room.gameOver = false;
-  room.shop = null; room.result = null; room.runStart = Date.now(); room.runEnd = 0;
+  room.shop = null; room.result = null; room.runStart = Date.now(); room.runEnd = 0; room.paused = false; room.rematch.clear();
   if (room.daily) room.rng = mulberry(parseInt(room.daily.replace(/-/g, ""), 10));
   Object.values(room.players).forEach(p => {
-    p.hp = START_HP; p.alive = true; p.reviveT = 0; p.lastHit = 0; p.up = {}; p.stats = newStats(); p.inv = []; p.equip = { weapon: null, head: null, trinket: null };
+    p.hp = DIFFS[room.diff].start; p.alive = true; p.reviveT = 0; p.lastHit = 0; p.up = {}; p.stats = newStats(); p.inv = []; p.equip = { weapon: null, head: null, trinket: null };
   });
   initStage(room);
 }
@@ -201,12 +219,12 @@ function finishRun(room) {
   const time = Math.round((room.runEnd - room.runStart) / 1000);
   const ps = Object.values(room.players);
   const kills = ps.reduce((a, p) => a + p.stats.kills, 0), downs = ps.reduce((a, p) => a + p.stats.downs, 0);
-  const score = Math.max(0, 3000 + Math.max(0, 3000 - time * 4) + room.gold * 10 + kills * 25 - downs * 150);
+  const score = Math.round(Math.max(0, 3000 + Math.max(0, 3000 - time * 4) + room.gold * 10 + kills * 25 - downs * 150) * DIFFS[room.diff].score);
   const names = ps.map(p => p.name).join(" & ");
-  board.push({ names, score, time, gold: room.gold, daily: room.daily, ts: Date.now() });
+  board.push({ names, score, time, gold: room.gold, daily: room.daily, diff: room.diff, ts: Date.now() });
   saveBoard();
   room.result = {
-    time, score, gold: room.gold, kills, downs, daily: room.daily,
+    time, score, gold: room.gold, kills, downs, daily: room.daily, diff: DIFFS[room.diff].label,
     players: ps.map(p => ({ name: p.name, cls: p.cls, ...p.stats })),
     top: topBoard(!!room.daily)
   };
@@ -217,10 +235,11 @@ function finishRun(room) {
 /* ------------------------------------------------------------------ sockets */
 io.on("connection", socket => {
   const cleanCls = c => (c === "knight" ? "knight" : "bard");
-  socket.on("createRoom", ({ name, cls, daily } = {}, cb = () => {}) => {
+  socket.on("createRoom", ({ name, cls, daily, diff } = {}, cb = () => {}) => {
     let code;
     do { code = makeCode(); } while (rooms.has(code));
     const room = makeRoom(code, !!daily);
+    room.diff = cleanDiff(diff);
     rooms.set(code, room);
     joinRoom(socket, room, name, cls, cb);
   });
@@ -241,7 +260,7 @@ io.on("connection", socket => {
     const index = Object.keys(room.players).length;
     const player = {
       id: sock.id, name: String(name || `Player ${index + 1}`).slice(0, 18), slot, cls: cleanCls(cls),
-      x: 100 + slot * 55, y: 260, hp: START_HP, alive: true, facing: "right",
+      x: 100 + slot * 55, y: 260, hp: DIFFS[room.diff].start, alive: true, facing: "right",
       input: { up: false, down: false, left: false, right: false }, attackUntil: 0,
       lastAttack: 0, lastNote: 0, lastSpecial: 0, lastHit: 0, lastDash: 0, dashUntil: 0, dashDir: [1, 0], reviveT: 0,
       noteUntil: 0, guardUntil: 0, up: {}, stats: newStats(), inv: [], equip: { weapon: null, head: null, trinket: null }, combo: 0, comboAt: 0, nextAttackAt: 0, atkKind: 0
@@ -266,14 +285,14 @@ io.on("connection", socket => {
 
   const ctx = () => {
     const room = rooms.get(socket.data.roomCode); const p = room?.players[socket.id];
-    if (!p || !p.alive || room.finished || room.gameOver || room.shop) return null;
+    if (!p || !p.alive || room.finished || room.gameOver || room.shop || room.paused) return null;
     return { room, p, now: Date.now() };
   };
 
   socket.on("input", data => {
     const room = rooms.get(socket.data.roomCode);
     const p = room?.players[socket.id];
-    if (!p || !p.alive || room.finished || room.gameOver) return;
+    if (!p || !p.alive || room.finished || room.gameOver || room.paused) return;
     const keys = data || {};
     for (const k of ["up", "down", "left", "right"]) p.input[k] = !!keys[k];
     if (keys.facing && DIRS[keys.facing]) p.facing = keys.facing;
@@ -396,6 +415,27 @@ io.on("connection", socket => {
     fx(room, "buy", { id: p.id });
     broadcast(room);
   });
+  // Pause: either hero can freeze the run for both. Timers are shifted on resume so nothing "catches up".
+  socket.on("pause", () => {
+    const room = rooms.get(socket.data.roomCode); const me = room?.players[socket.id];
+    if (!room || !me || !room.started || room.finished || room.gameOver || room.shop) return;
+    const now = Date.now();
+    if (!room.paused) { room.paused = true; room.pausedAt = now; room.pausedBy = me.name; Object.values(room.players).forEach(p => { p.input = { up: false, down: false, left: false, right: false }; }); notice(room, `${me.name} paused the game.`); }
+    else { shiftTimers(room, now - room.pausedAt); room.paused = false; room.pausedBy = ""; notice(room, "Back in the fight!"); }
+    broadcast(room);
+  });
+  // Rematch: when every hero in the room asks, restart the run with the same team and difficulty.
+  socket.on("rematch", () => {
+    const room = rooms.get(socket.data.roomCode);
+    if (!room || !room.players[socket.id] || !(room.finished || room.gameOver)) return;
+    room.rematch.add(socket.id);
+    if (Object.keys(room.players).every(id => room.rematch.has(id))) {
+      resetRoom(room); startRun(room, 2200);
+      fx(room, "stage", { stage: 0 });
+      notice(room, "New run! Good luck.");
+    } else notice(room, "Waiting for your teammate to press PLAY AGAIN.");
+    broadcast(room);
+  });
   socket.on("ready", () => {
     const room = rooms.get(socket.data.roomCode);
     if (!room || !room.shop || !room.players[socket.id]) return;
@@ -436,9 +476,10 @@ function openChest(room, c, p) {
 function killEnemy(room, e, p) {
   e.alive = false;
   if (p) p.stats.kills++;
-  room.gold += MOB[e.kind].gold;
+  room.gold += defOf(e).gold;
   fx(room, "kill", { x: e.x, y: e.y, kind: e.kind });
   if (e.kind === "mimic" && p) giveItem(room, p, rollItem(room, 1), e);
+  if (e.elite) { Object.values(room.players).forEach(pl => giveItem(room, pl, rollItem(room, 1), e)); shake(room); notice(room, "The Iron Warden falls! Gear for everyone."); }
   if (e.kind === "boss") { Object.values(room.players).forEach(pl => giveItem(room, pl, rollItem(room, 2), e)); shake(room); room.shots = []; room.enemies.forEach(m => { if (m.alive) { m.alive = false; fx(room, "kill", { x: m.x, y: m.y, kind: m.kind }); } }); notice(room, "The Dragon of Debt is defeated! Reach the exit!"); return; }
   if (e.keeper && !room.key) {
     room.keyDrop = { x: clamp(e.x, 60, ROOM_W - 90), y: clamp(e.y, 80, ROOM_H - 60) };
@@ -473,6 +514,7 @@ function tick() {
   for (const room of rooms.values()) {
     if (room.finished || room.gameOver || Object.keys(room.players).length < 1) continue;
     const all = Object.values(room.players);
+    if (room.paused) { broadcast(room); continue; }
 
     // Shop phase: nothing moves; wait for ready or timeout.
     if (room.shop) {
@@ -480,7 +522,7 @@ function tick() {
       if (everyone || now > room.shop.until) {
         room.shop = null; room.stage++; initStage(room);
         fx(room, "stage", { stage: room.stage });
-        notice(room, `Room ${room.stage + 1}: ${roomLayouts[room.stage].name}`);
+        notice(room, `Room ${room.stage + 1}: ${roomLayouts[room.stage].name}` + (roomLayouts[room.stage].elite !== undefined ? ". The Iron Warden guards this room!" : ""));
         room.enemies.forEach(e => { e.activeAt = Date.now() + 1800; });
       }
       broadcast(room); continue;
@@ -504,7 +546,7 @@ function tick() {
     if (room.started) {
       for (const e of room.enemies.slice()) {
         if (!e.alive || now < e.activeAt || now < e.stunUntil) continue;
-        const def = MOB[e.kind];
+        const def = defOf(e);
         const target = alive.reduce((b, p) => Math.hypot(p.x - e.x, p.y - e.y) < Math.hypot(b.x - e.x, b.y - e.y) ? p : b, alive[0]);
         const dx = target.x - e.x, dy = target.y - e.y, d = Math.hypot(dx, dy) || 1;
         const boss = e.kind === "boss";
@@ -545,6 +587,10 @@ function tick() {
                 hurtPlayer(room, victim, def.dmg, e, now);
               }
               if (boss) fx(room, "slam", { x: e.x, y: e.y });
+              if (e.elite) {                       // the Warden's every-other-swing shockwave ring
+                fx(room, "slam", { x: e.x, y: e.y }); e.slams = (e.slams || 0) + 1;
+                if (e.slams % 2 === 0) { for (let i = 0; i < 8; i++) fireShot(room, e.x, e.y, i * Math.PI / 4 + 0.2, 175, 1, "fire"); fx(room, "bossfire", { x: e.x, y: e.y }); }
+              }
               // The slam hits the other hero too if they're in range.
               if (boss) alive.forEach(v => {
                 if (v.id !== e.windupTarget && v.alive && Math.hypot(v.x - e.x, v.y - e.y) < def.range + 14 && now >= v.dashUntil && now - v.lastHit > HIT_INVULN) hurtPlayer(room, v, def.dmg, e, now);
@@ -643,5 +689,5 @@ setInterval(tick, 50);
 if (require.main === module) {
   server.listen(PORT, () => console.log(`Riff & Shield listening on ${PORT}`));
 } else {
-  module.exports = { server, io, rooms, MOB, MAX_HP, roomLayouts, initStage, startRun, ITEMS, giveItem };   // for automated tests
+  module.exports = { server, io, rooms, MOB, MAX_HP, roomLayouts, initStage, startRun, ITEMS, giveItem, killEnemy, resetRoom, DIFFS };   // for automated tests
 }
