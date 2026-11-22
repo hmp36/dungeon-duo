@@ -27,6 +27,15 @@
         <div class="codebox"><small>ROOM CODE</small><strong id="codeLabel">------</strong><button id="copyBtn">COPY</button></div>
       </div>
       <div class="stage-wrap"><canvas id="gameCanvas" width="800" height="520"></canvas><div id="overlay" class="overlay hidden"><h2 id="overlayTitle"></h2><p id="overlayText"></p><button id="againBtn" class="primary">BACK TO LOBBY</button></div></div>
+      <div id="touchPad" class="touchpad">
+        <div class="dpad">
+          <button data-key="up" class="d-up" aria-label="Move up">&#9650;</button>
+          <button data-key="left" class="d-left" aria-label="Move left">&#9664;</button>
+          <button data-key="right" class="d-right" aria-label="Move right">&#9654;</button>
+          <button data-key="down" class="d-down" aria-label="Move down">&#9660;</button>
+        </div>
+        <button id="atkBtn" class="atk" aria-label="Attack">ATTACK</button>
+      </div>
       <div class="below"><div id="status">Waiting for your teammate…</div><div class="controls"><b>MOVE</b> WASD / ARROWS <b>ATTACK</b> SPACE</div></div>
       <aside class="rules"><b>HOW TO ESCAPE</b><span>1. Clear every monster in each room.</span><span>2. Find the glowing key in Room 2.</span><span>3. Carry it to Room 3. Every hero still standing must reach the exit.</span><span>❤️ You each have 3 hearts. At 0 hearts, you're out—no revives, but the team can still win. If everyone falls, the team loses.</span></aside>
     </section>
