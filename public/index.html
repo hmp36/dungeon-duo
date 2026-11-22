@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Dungeon Duo</title>
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
   <main class="shell">
@@ -24,7 +24,7 @@
       <div class="intro"><div class="eyebrow">CO-OP PIXEL ADVENTURE</div><h1>Enter the dungeon.<br><em>Escape together.</em></h1><p>Team up with a friend, clear five rooms, beat the Keeper for the key in the Crypt, and get every surviving hero to the exit.</p><div id="boardBox" class="board"></div></div>
       <div class="joinbox"><label for="playerName">HERO NAME</label><input id="playerName" maxlength="18" placeholder="Your name" value="Hero">
         <label>CHOOSE YOUR HERO</label>
-        <div class="clspick"><button type="button" data-cls="bard" class="cls on">🎸 TROUBADOUR</button><button type="button" data-cls="knight" class="cls">🛡 KNIGHT</button></div>
+        <div class="clspick"><button type="button" data-cls="bard" class="cls on"><canvas class="pv" data-cls="bard" width="300" height="375"></canvas><span>🎸 TROUBADOUR</span></button><button type="button" data-cls="knight" class="cls"><canvas class="pv" data-cls="knight" width="300" height="375"></canvas><span>🛡 KNIGHT</span></button></div>
         <p id="clsDesc" class="clsdesc"></p>
         <label class="chk"><input type="checkbox" id="dailyChk"> DAILY DUNGEON (same loot for everyone today)</label>
         <button id="createBtn" class="primary">CREATE A ROOM</button>
@@ -58,6 +58,6 @@
     </section>
     <footer>Built for brave friends • Stay together, watch your hearts.</footer>
   </main>
-  <script src="/socket.io/socket.io.js"></script><script src="game.js?v=8"></script>
+  <script src="/socket.io/socket.io.js"></script><script src="game.js?v=10"></script>
 </body>
 </html>
