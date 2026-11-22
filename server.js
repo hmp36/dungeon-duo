@@ -65,9 +65,9 @@ const MOB = {
 const defOf = e => (e.elite ? MOB.warden : MOB[e.kind]);
 const roomLayouts = [
   { name: "Forgotten Entrance", mobs: ["slime", "slime", "slime"], hearts: [[330, 450]], chests: [[700, 100], [120, 470]] },
-  { name: "The Crypt", mobs: ["skeleton", "skeleton", "bat", "bat"], keeper: 0, hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]] },
-  { name: "Archer Gallery", mobs: ["archer", "archer", "skeleton", "bat"], hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470], [710, 470]], mimics: 0.3 },
-  { name: "Treasure Chamber", mobs: ["brute", "skeleton", "archer", "bat"], elite: 0, hearts: [[400, 440]], chests: [[60, 90], [140, 90], [660, 90], [740, 90], [60, 470], [740, 470]], mimics: 0.35 },
+  { name: "The Crypt", mobs: ["skeleton", "skeleton", "bat", "bat"], keeper: 0, shield: [1], hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]] },
+  { name: "Archer Gallery", mobs: ["archer", "archer", "skeleton", "bat"], shield: [2], hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470], [710, 470]], mimics: 0.3 },
+  { name: "Treasure Chamber", mobs: ["brute", "skeleton", "archer", "bat"], elite: 0, shield: [1], hearts: [[400, 440]], chests: [[60, 90], [140, 90], [660, 90], [740, 90], [60, 470], [740, 470]], mimics: 0.35 },
   { name: "Dragon of Debt", mobs: ["boss"], hearts: [[300, 460], [500, 460]], chests: [] }
 ];
 const SPAWNS = [[90, 260], [145, 260]];
@@ -107,7 +107,7 @@ function makeEnemies(stage, graceMs, room) {
   const layout = roomLayouts[stage], now = Date.now();
   if (layout.mobs[0] === "boss") return [newEnemy(room, "boss", 600, 240, { activeAt: now + graceMs + 800 })];
   return layout.mobs.map((kind, i) => newEnemy(room, kind, 430 + (i % 2) * 105, 115 + Math.floor(i / 2) * 155,
-    { keeper: layout.keeper === i, elite: layout.elite === i, activeAt: now + graceMs }));
+    { keeper: layout.keeper === i, elite: layout.elite === i, shield: !!(layout.shield && layout.shield.includes(i)), activeAt: now + graceMs }));
 }
 function initStage(room) {
   room.enemies = makeEnemies(room.stage, 1600, room);
@@ -184,7 +184,7 @@ function publicState(room) {
       id: e.id, kind: e.kind, x: e.x, y: e.y, hp: e.hp, maxHp: e.maxHp, alive: true,
       keeper: e.keeper && !room.key && !room.keyDrop, hurt: now < e.hitUntil, stunned: now < e.stunUntil,
       winding: e.windupUntil > now || e.castUntil > now, dormant: now < e.activeAt || !room.started,
-      phase: e.phaseN, elite: !!e.elite
+      phase: e.phaseN, elite: !!e.elite, shield: !!e.shield
     })),
     shots: room.shots.map(s => ({ x: Math.round(s.x), y: Math.round(s.y), a: Math.atan2(s.vy, s.vx), k: s.kind })),
     pickups: room.pickups, chests: room.chests.map(c => ({ id: c.id, x: c.x, y: c.y, open: c.open })), gold: room.gold,
@@ -320,6 +320,10 @@ io.on("connection", socket => {
     const hitSet = new Set();
     const strike = (e, dm, stunMs, kx, ky) => {
       const big = e.kind === "boss" ? 1 : 0; hitSet.add(e.id);
+      if (e.shield && !spin && !pound && now >= e.stunUntil) {            // steel shields turn plain slashes: spin, pound or a stun breaks the guard
+        e.hp -= 1; e.hitUntil = now + 120; e.x = clampX(e.x + dx * 8); e.y = clampY(e.y + dy * 8);
+        fx(room, "blocked", { x: e.x, y: e.y }); if (e.hp <= 0) killEnemy(room, e, p); return;
+      }
       e.hp -= dm; e.hitUntil = now + 200; if (!big) e.windupUntil = 0;
       if (!big) { e.stunUntil = Math.max(e.stunUntil, now + stunMs); e.x = clampX(e.x + kx); e.y = clampY(e.y + ky); }
       if (e.hp <= 0) killEnemy(room, e, p); else fx(room, "hit", { x: e.x, y: e.y, crit, big: pound });

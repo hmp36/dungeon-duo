@@ -69,3 +69,4 @@ This is a small V1 prototype, not a production-hardened game. It uses in-memory 
 - **Iron Warden**: a mini-boss in the Treasure Chamber with a shockwave ring every other swing. Drops gear for both heroes.
 - **Share preview**: Open Graph and Twitter tags with `public/img/og.jpg` (1200x630).
 - The connection banner explains the free-tier cold start ("Waking the dungeon...") and Create/Join stay disabled until the socket connects.
+- **Shielded skeletons** carry a steel shield that turns plain slashes (1 damage). The whirlwind spin, the overhead pound or any stun breaks their guard, so the full combo matters.
