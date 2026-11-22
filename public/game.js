@@ -172,34 +172,115 @@ $("shop").addEventListener("pointerdown", e => {
   if (b.dataset.buy) socket.emit("buy", b.dataset.buy); else if (b.dataset.ready) socket.emit("ready");
 });
 
-/* ------------------------------------------------------------------ music */
-const TRACKS = [
-  { bpm: 104, root: 196, lead: [4, null, 2, null, 3, null, 1, null, 2, null, 0, null, 1, 2, null, null], bass: [0, null, 0, null, -2, null, -2, null, -3, null, -3, null, -2, null, 0, null], wave: "triangle" },
-  { bpm: 84, root: 175, lead: [2, null, null, 3, null, null, 1, null, 0, null, null, 2, null, null, -1, null], bass: [0, null, null, null, -3, null, null, null, -2, null, null, null, -3, null, null, null], wave: "sine" },
-  { bpm: 112, root: 208, lead: [4, 3, null, 4, 6, null, 4, null, 3, 2, null, 3, 5, null, 3, null], bass: [0, null, 2, null, 0, null, 2, null, -1, null, 1, null, -1, null, 1, null], wave: "square" },
-  { bpm: 120, root: 220, lead: [5, null, 7, null, 6, 5, null, 3, 5, null, 7, 8, 7, null, 5, null], bass: [0, null, 0, 2, 0, null, 0, 2, -2, null, -2, 0, -2, null, -2, 0], wave: "triangle" },
-  { bpm: 152, root: 147, lead: [4, 4, null, 5, 4, null, 2, null, 4, 4, null, 7, 6, null, 5, null], bass: [0, 0, null, 0, -3, null, -3, null, 0, 0, null, 0, -2, null, -2, null], wave: "sawtooth", drums: true }
-];
-const SCALE = [0, 3, 5, 7, 10];
-const degFreq = (root, d) => root * Math.pow(2, SCALE[((d % 5) + 5) % 5] / 12 + Math.floor(d / 5));
-let curTrack = -1, mStep = 0, mNext = 0, mTimer = null;
-function setTrack(stage, waiting) {
-  const want = waiting ? 1 : stage; if (want === curTrack) return; curTrack = want; mStep = 0;
+/* ------------------------------------------------------------------ music: metal-style engine
+   Distorted power-chord rhythm guitar, palm-muted gallops, drums with double kick, and a shredding
+   lead built from scale runs, arpeggios and sequences (harmonic minor / phrygian dominant). */
+const SCALES = { hm: [0, 2, 3, 5, 7, 8, 11], pd: [0, 1, 4, 5, 7, 8, 10], nm: [0, 2, 3, 5, 7, 8, 10] };
+function seeded(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function genLead(seed, bars) {
+  const r = seeded(seed), out = [];
+  for (let b = 0; b < 4; b++) {
+    const bar = Array(16).fill(null);
+    if (bars[b]) {
+      const type = Math.floor(r() * 4), d0 = Math.floor(r() * 3);
+      for (let i = 0; i < 16; i++) {
+        let d;
+        if (type === 0) d = d0 + (i < 8 ? i : 15 - i);                                  // run up then back down
+        else if (type === 1) d = d0 + [0, 2, 4, 7, 4, 2][i % 6];                       // sweeping arpeggio
+        else if (type === 2) d = i < 8 ? d0 + 4 + (i % 2) : d0 + 4 + (i - 8) % 4 * 2 - 2;   // trill then climb
+        else d = d0 + Math.floor(i / 3) + (i % 3);                                       // 3-note sequence
+        bar[i] = d;
+      }
+      if (bars[b] === 2) { bar[14] = null; bar[15] = null; bar[7] = null; }                // lighter phrasing
+    }
+    out.push(bar);
+  }
+  return out;
 }
-function musicTick() {
-  if (muted || !actx || curTrack < 0) return;
-  const tr = TRACKS[curTrack], step = 60 / tr.bpm / 2;
-  if (mNext < actx.currentTime) mNext = actx.currentTime + 0.05;
-  while (mNext < actx.currentTime + 0.25) {
-    const i = mStep % 16, l = tr.lead[i], b = tr.bass[i], d = mNext - actx.currentTime;
-    if (l !== null && l !== undefined) tone(degFreq(tr.root * 2, l), step * 1.6, tr.wave, 0.022, null, d);
-    if (b !== null && b !== undefined) tone(degFreq(tr.root / 2, b), step * 1.8, "square", 0.03, null, d);
-    if (tr.drums && i % 2 === 0) noise(0.05, i % 4 === 0 ? 0.05 : 0.025, i % 4 === 0 ? 200 : 4000, d);
-    else if (i % 4 === 0) noise(0.04, 0.02, 5000, d);
-    mStep++; mNext += step;
+const TRACKS = [
+  { name: "entrance", bpm: 126, root: 82.41, scale: "hm", prog: [0, 0, 8, 7], gtrVol: 0.15,
+    rhythm: ["xmmxmmxmxmmxmmxm", "xmmxmmxmxmmxmmxm", "xmmxmmxmxmmxmmxm", "xmmxmmxmmxxxm.x."],
+    kick: ["x.....x.x.x.....", "x.....x.x.x.....", "x.....x.x.x.....", "x...x...x.x.x.x."], snare: ["....x.......x...", "....x.......x...", "....x.......x...", "....x.......x.x."], hat: ["x.x.x.x.x.x.x.x."],
+    leadBars: [0, 2, 0, 1], seed: 11 },
+  { name: "crypt", bpm: 100, root: 73.42, scale: "pd", prog: [0, 0, 1, 0], gtrVol: 0.16,
+    rhythm: ["x...m.m.x...m.m.", "x...m.m.x.......", "x...m.m.x...m.m.", "x.m.x.m.x.......x"],
+    kick: ["x.......x.x.....", "x.......x.......", "x.......x.x.....", "x.x.....x.x.x..."], snare: ["........x.......", "........x.......", "........x.......", "........x.....x."], hat: ["x...x...x...x..."],
+    leadBars: [0, 2, 0, 2], seed: 23 },
+  { name: "gallery", bpm: 140, root: 98, scale: "hm", prog: [0, 3, 8, 7], gtrVol: 0.15,
+    rhythm: ["xmmxmmxmxmmxmmxm", "xmmxmmxmmxmmxxx.", "xmmxmmxmxmmxmmxm", "xmxmxmxmxxxxm.x."],
+    kick: ["x..xx..xx..xx.x.", "x..xx..xx..xx.x.", "x..xx..xx..xx.x.", "x.x.x.x.xxxx...."], snare: ["....x.......x...", "....x.......x...", "....x.......x...", "....x...x...x..."], hat: ["x.x.x.x.x.x.x.x."],
+    leadBars: [2, 1, 2, 1], seed: 37 },
+  { name: "treasure", bpm: 152, root: 87.31, scale: "hm", prog: [0, 0, 8, 10], gtrVol: 0.15,
+    rhythm: ["xmmxmmxmmxmmxmmx", "xmmxmmxmmxmmxmmx", "xmmxmmxmmxmmxmmx", "xxmmxxmmxxxxxxx."],
+    kick: ["xx.xx.xxxx.xx.xx", "xx.xx.xxxx.xx.xx", "xx.xx.xxxx.xx.xx", "xxxxxxxxxxxxxxxx"], snare: ["....x.......x...", "....x.......x...", "....x.......x...", "....x...x...x..x"], hat: ["x.x.x.x.x.x.x.x."],
+    leadBars: [1, 1, 1, 1], seed: 53 },
+  { name: "boss", bpm: 176, root: 73.42, scale: "hm", prog: [0, 0, 1, 0], gtrVol: 0.16,
+    rhythm: ["xmmmxmmmxmmmxmmm", "xmmxmmxmmxmmxmmm", "xmxmxmxmxmxmxmxm", "xxxxxxxxxxxxxxxx"],
+    kick: ["xxxxxxxxxxxxxxxx", "xxxxxxxxxxxxxxxx", "xxxxxxxxxxxxxxxx", "xxxxxxxxxxxxxxxx"], snare: ["....x.......x...", "..x.x.x...x.x.x.", "....x.......x...", "x.x.x.x.x.x.x.x."], hat: ["x.x.x.x.x.x.x.x.", "x.x.x.x.x.x.x.x.", "x.x.x.x.x.x.x.x.", "xxxxxxxxxxxxxxxx"],
+    leadBars: [1, 1, 1, 1], seed: 71 },
+  { name: "menu", bpm: 92, root: 110, scale: "nm", prog: [0, 8, 10, 7], clean: true, gtrVol: 0.1,
+    rhythm: ["x"], kick: ["................"], snare: ["................"], hat: ["................"], leadBars: [0, 0, 0, 0], seed: 5 }
+];
+TRACKS.forEach(t => { t.lead = genLead(t.seed, t.leadBars); });
+const scaleFreq = (root, sc, deg) => root * Math.pow(2, (SCALES[sc][((deg % 7) + 7) % 7] + 12 * Math.floor(deg / 7)) / 12);
+
+function buildEngine(a) {
+  const bus = a.createGain(); bus.gain.value = 0.36; const comp = a.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 4; bus.connect(comp); comp.connect(a.destination);
+  const curve = (k) => { const n = 1024, c = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i * 2 / n - 1; c[i] = Math.tanh(x * k); } return c; };
+  const gIn = a.createGain(); gIn.gain.value = 1; const gSh = a.createWaveShaper(); gSh.curve = curve(7); gSh.oversample = "2x";
+  const gLp = a.createBiquadFilter(); gLp.type = "lowpass"; gLp.frequency.value = 3400; const gHp = a.createBiquadFilter(); gHp.type = "highpass"; gHp.frequency.value = 70;
+  const gOut = a.createGain(); gOut.gain.value = 0.6; gIn.connect(gSh); gSh.connect(gLp); gLp.connect(gHp); gHp.connect(gOut); gOut.connect(bus);
+  const lIn = a.createGain(); const lSh = a.createWaveShaper(); lSh.curve = curve(3.5); const lLp = a.createBiquadFilter(); lLp.type = "lowpass"; lLp.frequency.value = 5200; const lOut = a.createGain(); lOut.gain.value = 0.7;
+  lIn.connect(lSh); lSh.connect(lLp); lLp.connect(lOut); lOut.connect(bus);
+  const dl = a.createDelay(1); dl.delayTime.value = 0.19; const fb = a.createGain(); fb.gain.value = 0.3; const wet = a.createGain(); wet.gain.value = 0.28; lOut.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(wet); wet.connect(bus);
+  const nb = a.createBuffer(1, a.sampleRate * 0.5, a.sampleRate), nd = nb.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  return { a, bus, gIn, lIn, nb };
+}
+function mEnv(a, t, peak, dur, att = 0.004) { const g = a.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + att); g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(att + 0.01, dur)); return g; }
+function vGtr(E, freqs, t, dur, vol) {
+  for (const f of freqs) for (const det of [-7, 7]) {
+    const o = E.a.createOscillator(); o.type = "sawtooth"; o.frequency.value = f; o.detune.value = det;
+    const g = mEnv(E.a, t, vol / freqs.length, dur); o.connect(g); g.connect(E.gIn); o.start(t); o.stop(t + dur + 0.05);
   }
 }
-setInterval(musicTick, 80);
+function vLead(E, f, t, dur, vol) {
+  const o = E.a.createOscillator(), o2 = E.a.createOscillator(); o.type = "sawtooth"; o2.type = "square";
+  o.frequency.setValueAtTime(f * 0.975, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.03); o2.frequency.setValueAtTime(f * 0.975, t); o2.frequency.exponentialRampToValueAtTime(f, t + 0.03); o2.detune.value = 9;
+  const g = mEnv(E.a, t, vol, dur, 0.006); o.connect(g); o2.connect(g); g.connect(E.lIn); o.start(t); o2.start(t); o.stop(t + dur + 0.05); o2.stop(t + dur + 0.05);
+}
+function vPluck(E, f, t, dur, vol) { const o = E.a.createOscillator(); o.type = "triangle"; o.frequency.value = f; const g = mEnv(E.a, t, vol, dur, 0.006); o.connect(g); g.connect(E.bus); o.start(t); o.stop(t + dur + 0.05); }
+function vNoise(E, t, dur, vol, type, freq) { const s = E.a.createBufferSource(); s.buffer = E.nb; const f = E.a.createBiquadFilter(); f.type = type; f.frequency.value = freq; const g = mEnv(E.a, t, vol, dur, 0.001); s.connect(f); f.connect(g); g.connect(E.bus); s.start(t); s.stop(t + dur + 0.05); }
+function vKick(E, t) { const o = E.a.createOscillator(); o.type = "sine"; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.1); const g = mEnv(E.a, t, 0.9, 0.16, 0.002); o.connect(g); g.connect(E.bus); o.start(t); o.stop(t + 0.2); vNoise(E, t, 0.02, 0.12, "highpass", 3000); }
+function vSnare(E, t) { vNoise(E, t, 0.16, 0.38, "bandpass", 1900); const o = E.a.createOscillator(); o.type = "triangle"; o.frequency.setValueAtTime(220, t); o.frequency.exponentialRampToValueAtTime(140, t + 0.08); const g = mEnv(E.a, t, 0.35, 0.1, 0.002); o.connect(g); g.connect(E.bus); o.start(t); o.stop(t + 0.15); }
+
+// Schedules every voice for 16th-note `s` of track `tr` at time t. Works on any (Offline)AudioContext.
+function playStep(E, tr, s, t) {
+  const bar = Math.floor(s / 16) % 4, i = s % 16, step = 60 / tr.bpm / 4, rootF = tr.root * Math.pow(2, tr.prog[bar] / 12);
+  if (tr.clean) {
+    const arp = [0, 7, 12, 16, 12, 7, 0, 7, 12, 16, 19, 16, 12, 7, 12, 7][i];
+    if (i % 2 === 0) vPluck(E, rootF * 2 * Math.pow(2, arp / 12), t, step * 3.2, 0.3);
+    if (i === 0) { vPluck(E, rootF, t, step * 12, 0.22); } return;
+  }
+  const rp = tr.rhythm[bar % tr.rhythm.length][i];
+  const chord = [rootF, rootF * 1.4983, rootF * 2];
+  if (rp === "x") vGtr(E, chord, t, step * 2.6, tr.gtrVol); else if (rp === "m") vGtr(E, chord, t, step * 0.8, tr.gtrVol * 0.9);
+  if (tr.kick[bar % tr.kick.length][i] === "x") vKick(E, t);
+  if (tr.snare[bar % tr.snare.length][i] === "x") vSnare(E, t);
+  if (tr.hat[bar % tr.hat.length][i] === "x") vNoise(E, t, 0.04, 0.12, "highpass", 7500);
+  const ld = tr.lead[bar][i]; if (ld !== null) vLead(E, scaleFreq(tr.root * 8, tr.scale, ld), t, step * 1.05, 0.085);
+}
+
+let curTrack = -1, mStep = 0, mNext = 0, engine = null;
+function setTrack(stage, waiting) { const want = waiting ? 5 : stage; if (want === curTrack) return; curTrack = want; mStep = 0; mNext = 0; }
+function musicTick() {
+  if (muted || !actx || curTrack < 0) return;
+  if (!engine || engine.a !== actx) engine = buildEngine(actx);
+  const tr = TRACKS[curTrack], step = 60 / tr.bpm / 4;
+  if (mNext < actx.currentTime) mNext = actx.currentTime + 0.06;
+  while (mNext < actx.currentTime + 0.3) { playStep(engine, tr, mStep, mNext); mStep++; mNext += step; }
+}
+setInterval(musicTick, 90);
+
 
 /* ------------------------------------------------------------------ input */
 function doDash() { socket.emit("dash"); }
