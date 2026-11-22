@@ -13,7 +13,7 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 
 const rooms = new Map();
 const ROOM_W = 800, ROOM_H = 520;
-const MAX_HP = 5;
+const START_HP = 5, MAX_HP = 7;   // heroes start with 5; hearts can top you up to 7
 const REVIVE_TIME = 2.2;       // seconds a teammate must stand next to a fallen hero
 const HIT_INVULN = 1100;       // ms of protection after taking a hit
 const NOTE_COOLDOWN = 4000, NOTE_STUN = 1100;
@@ -104,7 +104,7 @@ function notice(room, msg) { io.to(room.code).emit("notice", msg); }
 function resetRoom(room) {
   room.stage = 0; room.gold = 0; room.key = false; room.keyDrop = null; room.finished = false; room.gameOver = false;
   Object.values(room.players).forEach(p => {
-    p.hp = MAX_HP; p.alive = true; p.reviveT = 0; p.lastHit = 0;
+    p.hp = START_HP; p.alive = true; p.reviveT = 0; p.lastHit = 0;
   });
   initStage(room);
 }
@@ -134,7 +134,7 @@ io.on("connection", socket => {
     const index = Object.keys(room.players).length;
     const player = {
       id: sock.id, name: String(name || `Player ${index + 1}`).slice(0, 18), slot,
-      x: 100 + slot * 55, y: 260, hp: MAX_HP, alive: true, facing: "right",
+      x: 100 + slot * 55, y: 260, hp: START_HP, alive: true, facing: "right",
       input: { up: false, down: false, left: false, right: false }, attackUntil: 0,
       lastAttack: 0, lastNote: 0, lastHit: 0, lastDash: 0, dashUntil: 0, dashDir: [1, 0], reviveT: 0
     };

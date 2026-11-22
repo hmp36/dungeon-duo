@@ -21,7 +21,7 @@ Hosted on Render's free tier, so the first visit after a quiet period can take u
 9. Carry the key into **Room 3**. Clear the monsters, then have every living player stand by the exit on the right.
 10. You win when all surviving players escape.
 
-Each player has **5 hearts**. Walk over hearts to pick them up: one is placed in every room and monsters often drop more. At zero hearts a hero falls, but a teammate can **revive** them by standing next to them for about 2 seconds. The team loses if everyone is down.
+Each player starts with **5 hearts** and can grow to 7 by picking up hearts. Walk over hearts to pick them up: one is placed in every room and monsters often drop more. At zero hearts a hero falls, but a teammate can **revive** them by standing next to them for about 2 seconds. The team loses if everyone is down.
 
 Monsters: slimes, skeletons, fast erratic bats, and a heavy-hitting brute. Sound effects are built in (toggle with the Sound button).
 
