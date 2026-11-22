@@ -10,7 +10,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 
-app.use(express.static("public"));
+app.use(express.static("public", { etag: true, maxAge: 0, setHeaders: (res, p) => { if (/\.(js|css|html)$/.test(p)) res.setHeader("Cache-Control", "no-cache"); } }));
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 /* ------------------------------------------------------------------ leaderboard (best effort file) */

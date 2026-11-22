@@ -227,10 +227,10 @@ const scaleFreq = (root, sc, deg) => root * Math.pow(2, (SCALES[sc][((deg % 7) +
 function buildEngine(a) {
   const bus = a.createGain(); bus.gain.value = 0.36; const comp = a.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 4; bus.connect(comp); comp.connect(a.destination);
   const curve = (k) => { const n = 1024, c = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i * 2 / n - 1; c[i] = Math.tanh(x * k); } return c; };
-  const gIn = a.createGain(); gIn.gain.value = 1; const gSh = a.createWaveShaper(); gSh.curve = curve(7); gSh.oversample = "2x";
+  const gIn = a.createGain(); gIn.gain.value = 16; const gSh = a.createWaveShaper(); gSh.curve = curve(7); gSh.oversample = "2x";
   const gLp = a.createBiquadFilter(); gLp.type = "lowpass"; gLp.frequency.value = 3400; const gHp = a.createBiquadFilter(); gHp.type = "highpass"; gHp.frequency.value = 70;
-  const gOut = a.createGain(); gOut.gain.value = 0.6; gIn.connect(gSh); gSh.connect(gLp); gLp.connect(gHp); gHp.connect(gOut); gOut.connect(bus);
-  const lIn = a.createGain(); const lSh = a.createWaveShaper(); lSh.curve = curve(3.5); const lLp = a.createBiquadFilter(); lLp.type = "lowpass"; lLp.frequency.value = 5200; const lOut = a.createGain(); lOut.gain.value = 0.7;
+  const gOut = a.createGain(); gOut.gain.value = 0.26; gIn.connect(gSh); gSh.connect(gLp); gLp.connect(gHp); gHp.connect(gOut); gOut.connect(bus);
+  const lIn = a.createGain(); lIn.gain.value = 9; const lSh = a.createWaveShaper(); lSh.curve = curve(2.5); const lLp = a.createBiquadFilter(); lLp.type = "lowpass"; lLp.frequency.value = 5200; const lOut = a.createGain(); lOut.gain.value = 0.3;
   lIn.connect(lSh); lSh.connect(lLp); lLp.connect(lOut); lOut.connect(bus);
   const dl = a.createDelay(1); dl.delayTime.value = 0.19; const fb = a.createGain(); fb.gain.value = 0.3; const wet = a.createGain(); wet.gain.value = 0.28; lOut.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(wet); wet.connect(bus);
   const nb = a.createBuffer(1, a.sampleRate * 0.5, a.sampleRate), nd = nb.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
