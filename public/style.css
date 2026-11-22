@@ -61,3 +61,5 @@ button:disabled{opacity:.5;cursor:not-allowed;transform:none!important;filter:no
 #cap b{font:9px 'Press Start 2P';color:var(--gold);margin-right:8px}
 #mapOv{z-index:7;background:#090d15f2}
 .linkbtn{background:none;color:#8aa0c8;font:600 12px 'Space Grotesk';padding:0 4px;text-decoration:underline}
+@media(max-width:700px){#dlg{padding:8px 10px 5px}#dlg b{font-size:8px;margin-bottom:5px}#dlgText{font-size:12px;line-height:1.4;min-height:0}#dlg small{font-size:7px}#cap{font-size:11px;padding:6px 8px}#cap b{font-size:7px;display:block;margin:0 0 3px}}
+@media(max-width:420px) and (pointer:coarse){.touchpad .dash{width:52px;height:52px;font-size:7px}.dpad{grid-template-columns:repeat(3,48px);grid-template-rows:repeat(3,48px)}.touchpad .atk,.touchpad .btns .atk{width:76px;height:76px}}

@@ -186,7 +186,7 @@ function drawHub(t) {
 
 /* ---- dialogue ---- */
 let dlgActive = false, dlgQ = [], dlgFull = "", dlgTimer = null, dlgEnd = null, capTimer = null;
-function say(lines, onEnd) { dlgQ = lines.slice(); dlgEnd = onEnd || null; dlgActive = true; $("dlg").classList.remove("hidden"); dlgShow(); }
+function say(lines, onEnd) { $("cap").classList.add("hidden"); dlgQ = lines.slice(); dlgEnd = onEnd || null; dlgActive = true; $("dlg").classList.remove("hidden"); dlgShow(); }
 function dlgShow() {
   const l = dlgQ.shift(); if (!l) return endDlg();
   dlgFull = l[1]; $("dlgName").textContent = l[0]; const el = $("dlgText"); let i = 0; clearInterval(dlgTimer); el.textContent = "";
@@ -288,6 +288,7 @@ function storyOnState(s) {
   if (!s.story) { if (mapOpen) toggleMap(); return; }
   let ch = false; for (const id of s.story.done) if (!WORLD.done.includes(id)) { WORLD.done.push(id); ch = true; } if (ch) saveWorld();
   if (s.scene !== "hub" && hubShopOpen) closeHubShop();
+  if (s.scene === "hub") $("cap").classList.add("hidden");
   if (s.scene === "hub") {
     if (hubShopOpen) { const me = s.players.find(p => p.id === myId); if (me && Math.hypot(me.x - 630, me.y - 345) > 210) closeHubShop(); }
     if (!dlgActive && !s.waiting && !s.paused && !s.finished && !s.gameOver) {
