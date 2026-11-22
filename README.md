@@ -56,7 +56,7 @@ This is a small V1 prototype, not a production-hardened game. It uses in-memory 
 
 ## Gear and combat
 - Chests, mimics and the boss drop gear (weapon, head, trinket; common, uncommon, rare). Press I (or GEAR) to equip.
-- Attacks chain into a 3-hit combo with a heavy finisher; attacking right after a dash is a lunge. Gear can add crits.
+- Attacks chain into a 4-hit combo: slash, backslash, whirlwind spin (hits all around), then an overhead ground pound (Ground Pound for the Knight, Power Chord for the Troubadour) with a stunning shockwave. Attacking right after a dash is a lunge. Gear can add crits.
 
 ## Visuals
 - Renders at 2x resolution with rim lighting, soft outlines, contact shadows, light shafts, two-level bloom and film grain.

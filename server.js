@@ -303,30 +303,47 @@ io.on("connection", socket => {
     const c = ctx(); if (!c) return; const { room, p, now } = c;
     const knight = p.cls === "knight", gs = gearStats(p);
     if (now < p.nextAttackAt) return;
-    const chain = now - p.comboAt < 800 ? (p.combo + 1) % 3 : 0;
+    // 4-hit chain: slash, backslash, whirlwind spin, overhead ground pound (kinds 0,1,4,2). A dash-attack is a lunge thrust (kind 3).
+    const chain = now - p.comboAt < 900 ? (p.combo + 1) % 4 : 0;
     p.combo = chain; p.comboAt = now;
     const lunge = now - p.lastDash < 380;
-    const finisher = chain === 2;
-    p.nextAttackAt = now + (finisher ? 640 : knight ? 400 : 360);
-    p.attackUntil = now + (finisher ? 380 : 260); p.atkKind = lunge ? 3 : chain;
-    fx(room, "swing", { id: p.id, kind: p.atkKind });
+    const spin = chain === 2 && !lunge, pound = chain === 3 && !lunge, finisher = pound;
+    p.nextAttackAt = now + (pound ? 700 : spin ? 430 : knight ? 400 : 360);
+    p.attackUntil = now + (pound ? 420 : spin ? 340 : 260); p.atkKind = lunge ? 3 : pound ? 2 : spin ? 4 : chain;
+    fx(room, "swing", { id: p.id, kind: p.atkKind, cls: p.cls });
     const [dx, dy] = DIRS[p.facing] || [1, 0];
     const crit = rand(room) * 100 < gs.crit;
-    const reach = (knight ? 116 : 96) + gs.reach + (finisher ? 22 : 0) + (lunge ? 34 : 0), width = (knight ? 64 : 48) + (finisher ? 14 : 0);
-    const dmg = 2 + (p.up.dmg || 0) + gs.dmg + (finisher ? 1 : 0) + (lunge ? 1 : 0) + (crit ? 2 : 0);
-    const kb = finisher ? 70 : 40;
-    if (p.cls) { /* movement burst on swing */ const step = lunge ? 0 : 14; p.x = clampX(p.x + dx * step); p.y = clampY(p.y + dy * step); }
+    const reach = (knight ? 116 : 96) + gs.reach + (pound ? 26 : 0) + (lunge ? 34 : 0), width = (knight ? 64 : 48) + (pound ? 18 : 0);
+    const dmg = 2 + (p.up.dmg || 0) + gs.dmg + (pound ? 2 : 0) + (lunge ? 1 : 0) + (crit ? 2 : 0);
+    const kb = pound ? 70 : 40;
+    if (p.cls) { /* movement burst on swing */ const step = lunge ? 0 : spin ? 0 : pound ? 6 : 14; p.x = clampX(p.x + dx * step); p.y = clampY(p.y + dy * step); }
+    const hitSet = new Set();
+    const strike = (e, dm, stunMs, kx, ky) => {
+      const big = e.kind === "boss" ? 1 : 0; hitSet.add(e.id);
+      e.hp -= dm; e.hitUntil = now + 200; if (!big) e.windupUntil = 0;
+      if (!big) { e.stunUntil = Math.max(e.stunUntil, now + stunMs); e.x = clampX(e.x + kx); e.y = clampY(e.y + ky); }
+      if (e.hp <= 0) killEnemy(room, e, p); else fx(room, "hit", { x: e.x, y: e.y, crit, big: pound });
+    };
     room.enemies.forEach(e => {
       if (!e.alive) return;
-      const big = e.kind === "boss" ? 1 : 0;
-      const vx = e.x - p.x, vy = e.y - p.y, along = vx * dx + vy * dy, side = Math.abs(vx * dy - vy * dx);
-      if (along >= -8 && along < reach + big * 40 && side < width + big * 34) {
-        e.hp -= dmg; e.hitUntil = now + 200; e.windupUntil = big ? e.windupUntil : 0;
-        if (!big) { e.stunUntil = Math.max(e.stunUntil, now + (finisher ? 520 : 300)); e.x = clampX(e.x + dx * kb); e.y = clampY(e.y + dy * kb); }
-        if (e.hp <= 0) killEnemy(room, e, p);
-        else fx(room, "hit", { x: e.x, y: e.y, crit, big: finisher });
+      const big = e.kind === "boss" ? 1 : 0, vx = e.x - p.x, vy = e.y - p.y;
+      if (spin) {                                              // whirlwind: hits everything around the hero
+        const dist = Math.hypot(vx, vy) || 1;
+        if (dist < 90 + gs.reach * 0.5 + big * 44) strike(e, dmg, 340, (vx / dist) * 46, (vy / dist) * 46);
+        return;
       }
+      const along = vx * dx + vy * dy, side = Math.abs(vx * dy - vy * dx);
+      if (along >= -8 && along < reach + big * 40 && side < width + big * 34) strike(e, dmg, pound ? 520 : 300, dx * kb, dy * kb);
     });
+    if (pound) {                                               // ground shockwave where the weapon lands
+      const ix = clampX(p.x + dx * 78), iy = clampY(p.y + dy * 78), R = 108;
+      fx(room, "pound", { x: ix, y: iy, cls: p.cls });
+      room.enemies.forEach(e => {
+        if (!e.alive || hitSet.has(e.id)) return;
+        const vx = e.x - ix, vy = e.y - iy, dist = Math.hypot(vx, vy) || 1;
+        if (dist < R + (e.kind === "boss" ? 40 : 0)) strike(e, 1 + (p.up.dmg || 0) + (gs.dmg > 0 ? 1 : 0), 750, (vx / dist) * 34, (vy / dist) * 34);
+      });
+    }
     room.chests.forEach(ch => {
       if (ch.open) return;
       const vx = ch.x - p.x, vy = ch.y - p.y, along = vx * dx + vy * dy, side = Math.abs(vx * dy - vy * dx);
