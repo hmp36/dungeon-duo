@@ -94,6 +94,7 @@ function updateHud() {
   $("healthLabel").textContent = ps.map(p => `${p.name}: ${"❤️".repeat(p.hp)}${"🖤".repeat(mx - p.hp)}${p.alive ? "" : " DOWN"}`).join("　");
   $("enemyLabel").textContent = `${state.enemyCount} remaining`;
   $("keyLabel").textContent = state.key ? "🗝️ Carried" : state.keyDrop ? "✨ On the floor!" : "🔒 Not found";
+  $("goldLabel").textContent = "🪙 " + (state.gold || 0);
   $("soloBtn").classList.toggle("hidden", !state.waiting);
 }
 function checkOverlay() {
@@ -170,6 +171,7 @@ function handleFx(f) {
     case "heal": burst(f.x, f.y, "#ff8fb3", 10, 80, 700, 4, -80); floater(f.x, f.y - 20, "+1 HEART", "#ff9dbb"); sfx.heal(); break;
     case "keydrop": burst(f.x, f.y, "#ffd86b", 24, 160, 800, 4, -30); floater(f.x, f.y - 30, "THE KEY!", "#ffe08a"); shake = Math.max(shake, 5); sfx.keydrop(); break;
     case "key": burst(f.x, f.y, "#ffe9a0", 26, 200, 800, 4, -60); floater(f.x, f.y - 30, "KEY GET!", "#ffe08a"); sfx.key(); break;
+    case "chest": burst(f.x, f.y, "#ffd86b", 20, 170, 800, 4, 160); if (f.loot === "gold") { floater(f.x, f.y - 30, "+25 GOLD", "#ffe08a"); sfx.key(); } else { floater(f.x, f.y - 30, "A HEART!", "#ff9dbb"); sfx.heal(); } shake = Math.max(shake, 4); break;
     case "door": burst(738, 262, "#ffd86b", 30, 200, 900, 4, -40); shake = Math.max(shake, 5); sfx.door(); break;
     case "notes": { sfx.notes(); const d = f.facing === "left" ? -1 : f.facing === "right" ? 1 : 0, v = f.facing === "up" ? -1 : f.facing === "down" ? 1 : 0;
       for (let i = 0; i < 9; i++) noteGlyphs.push({ x: f.x + d * 20, y: f.y - 10 + v * 20, vx: d * rnd(110, 260) + rnd(-40, 40) * (v ? 1 : 0), vy: v * rnd(110, 260) + rnd(-50, 50) * (d ? 1 : 0), life: 800, max: 800, g: ["♪", "♫", "♩"][i % 3], col: ["#ffe08a", "#7fe3ff", "#ff9dbb"][i % 3] });
@@ -239,7 +241,6 @@ function buildBg(stage) {
     g.beginPath(); g.moveTo(400, 120); g.lineTo(580, 260); g.lineTo(400, 400); g.lineTo(220, 260); g.closePath(); g.stroke();
     g.lineWidth = 1.5; g.beginPath(); g.moveTo(400, 160); g.lineTo(530, 260); g.lineTo(400, 360); g.lineTo(270, 260); g.closePath(); g.stroke();
     g.fillStyle = "rgba(243,201,105,.18)"; g.beginPath(); g.arc(400, 260, 34, 0, 6.283); g.fill();
-    for (const [cx, cy] of [[60, 86], [140, 86], [660, 86], [740, 86], [60, 470], [740, 470]]) { chest(g, cx, cy); coins(g, cx + 26, cy + 18, rng); }
   }
   bricks(g, 0, 0, W, 54, th);                          // top wall
   bricks(g, 0, 54, 18, H - 54, th); bricks(g, W - 18, 54, 18, H - 54, th); bricks(g, 0, H - 18, W, 18, th);
@@ -397,8 +398,20 @@ function drawDoor(t) {
     }
   }
 }
+function drawChest(c, t, near) {
+  const x = c.x, y = c.y; shadow(x, y + 18, 22);
+  if (!c.open) {
+    chest(ctx, x, y);
+    if (near) { ctx.fillStyle = "#ffe08a"; ctx.font = "bold 9px 'Press Start 2P',monospace"; ctx.textAlign = "center"; ctx.fillText("SMASH!", x, y - 24 + Math.sin(t * 0.01) * 2); }
+  } else {
+    px(x - 20, y - 4, 40, 22, "#6b4423"); px(x - 21, y - 6, 42, 4, "#d4a73c"); px(x - 17, y - 2, 34, 6, "#1a1208");
+    px(x - 20, y - 24, 40, 10, "#85562c"); px(x - 21, y - 16, 42, 3, "#d4a73c");
+  }
+}
 function drawPickups(t) {
   if (!state) return;
+  const me = state.players.find(p => p.id === myId);
+  (state.chests || []).forEach(c => drawChest(c, t, me && me.alive && Math.hypot(me.x - c.x, me.y - c.y) < 90));
   (state.pickups || []).forEach(pk => {
     const yy = pk.y + Math.sin(t * 0.006 + pk.x) * 3; shadow(pk.x, pk.y + 12, 9);
     heartShape(pk.x, yy, 11, "#ff5d8f"); ctx.fillStyle = "rgba(255,255,255,.7)"; ctx.fillRect(pk.x - 8, yy - 9, 4, 3);

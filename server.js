@@ -27,9 +27,9 @@ const MOB = {
   brute:    { hp: 6, speed: 30, range: 62, windup: 650, cooldown: 1900, dmg: 2, stop: 46 }
 };
 const roomLayouts = [
-  { name: "Forgotten Entrance", mobs: ["slime", "slime", "slime"], spawns: [[100, 260], [160, 260]], hearts: [[330, 450]] },
-  { name: "The Crypt", mobs: ["skeleton", "skeleton", "bat", "bat"], keeper: 0, spawns: [[90, 260], [145, 260]], hearts: [[400, 450]] },
-  { name: "Treasure Chamber", mobs: ["brute", "skeleton", "bat"], spawns: [[90, 260], [145, 260]], hearts: [[400, 440]] }
+  { name: "Forgotten Entrance", mobs: ["slime", "slime", "slime"], spawns: [[100, 260], [160, 260]], hearts: [[330, 450]], chests: [[700, 100], [120, 470]] },
+  { name: "The Crypt", mobs: ["skeleton", "skeleton", "bat", "bat"], keeper: 0, spawns: [[90, 260], [145, 260]], hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]] },
+  { name: "Treasure Chamber", mobs: ["brute", "skeleton", "bat"], spawns: [[90, 260], [145, 260]], hearts: [[400, 440]], chests: [[60, 90], [140, 90], [660, 90], [740, 90], [60, 470], [740, 470]] }
 ];
 const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 
@@ -48,7 +48,7 @@ function makeCode() {
 function makeRoom(code) {
   return {
     code, players: {}, stage: 0, key: false, keyDrop: null, finished: false, gameOver: false,
-    started: false, doorWas: false, enemies: [], pickups: []
+    started: false, doorWas: false, enemies: [], pickups: [], chests: [], gold: 0
   };
 }
 function makeEnemies(stage, graceMs) {
@@ -64,6 +64,7 @@ function makeEnemies(stage, graceMs) {
 function initStage(room) {
   room.enemies = makeEnemies(room.stage, 1600);
   room.pickups = roomLayouts[room.stage].hearts.map(([x, y], i) => ({ id: `h${room.stage}-${i}`, x, y }));
+  room.chests = roomLayouts[room.stage].chests.map(([x, y], i) => ({ id: `c${room.stage}-${i}`, x, y, open: false }));
   room.keyDrop = null;
   room.doorWas = false;
   const spawns = roomLayouts[room.stage].spawns;
@@ -91,7 +92,7 @@ function publicState(room) {
       keeper: e.keeper && !room.key && !room.keyDrop,
       hurt: now < e.hitUntil, stunned: now < e.stunUntil, winding: e.windupUntil > now, dormant: now < e.activeAt || !room.started
     })),
-    pickups: room.pickups,
+    pickups: room.pickups, chests: room.chests, gold: room.gold,
     enemyCount: room.enemies.filter(e => e.alive).length,
     doorOpen: cleared && (room.stage === 0 || room.key)
   };
@@ -101,7 +102,7 @@ function fx(room, type, data = {}) { io.to(room.code).emit("fx", { type, ...data
 function notice(room, msg) { io.to(room.code).emit("notice", msg); }
 
 function resetRoom(room) {
-  room.stage = 0; room.key = false; room.keyDrop = null; room.finished = false; room.gameOver = false;
+  room.stage = 0; room.gold = 0; room.key = false; room.keyDrop = null; room.finished = false; room.gameOver = false;
   Object.values(room.players).forEach(p => {
     p.hp = MAX_HP; p.alive = true; p.reviveT = 0; p.lastHit = 0;
   });
@@ -191,9 +192,13 @@ io.on("connection", socket => {
         else fx(room, "hit", { x: e.x, y: e.y });
       }
     });
+    room.chests.forEach(c => {
+      if (c.open) return;
+      const vx = c.x - p.x, vy = c.y - p.y, along = vx * dx + vy * dy, side = Math.abs(vx * dy - vy * dx);
+      if (along >= -20 && along < 100 && side < 50) openChest(room, c);
+    });
     broadcast(room);
   });
-
 
   // Guitar riff: a wave of music notes that stuns every monster in front of you.
   socket.on("note", () => {
@@ -239,6 +244,14 @@ io.on("connection", socket => {
     else broadcast(room);
   });
 });
+
+function openChest(room, c) {
+  c.open = true;
+  const heart = Math.random() < 0.4 && room.pickups.length < 4;
+  if (heart) room.pickups.push({ id: `c${crypto.randomBytes(3).toString("hex")}`, x: c.x, y: clamp(c.y + 38, 80, ROOM_H - 50) });
+  else room.gold += 25;
+  fx(room, "chest", { x: c.x, y: c.y, loot: heart ? "heart" : "gold" });
+}
 
 function killEnemy(room, e) {
   e.alive = false;
