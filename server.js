@@ -115,8 +115,40 @@ function startRun(room, grace) {
   room.started = true; room.runStart = Date.now();
   room.enemies.forEach(e => { e.activeAt = Date.now() + grace; });
 }
-const cap = p => MAX_HP + (p.up.hp || 0);
-const cdm = p => 1 - 0.2 * (p.up.cd || 0);
+/* ---- equipment ---- */
+const ITEMS = {
+  oak:     { name: "Oak Grip",        slot: "weapon",  rarity: 0, st: { dmg: 1 } },
+  edge:    { name: "Steel Edge",      slot: "weapon",  rarity: 1, st: { dmg: 1, reach: 14 } },
+  tooth:   { name: "Dragon Tooth",    slot: "weapon",  rarity: 2, st: { dmg: 2, crit: 15 } },
+  cap:     { name: "Leather Cap",     slot: "head",    rarity: 0, st: { hp: 1 } },
+  plume:   { name: "Plumed Hat",      slot: "head",    rarity: 1, st: { speed: 0.06, hp: 1 } },
+  crown:   { name: "Crown of Echoes", slot: "head",    rarity: 2, st: { cd: 0.15, stun: 400 } },
+  coin:    { name: "Lucky Coin",      slot: "trinket", rarity: 0, st: { crit: 10 } },
+  charm:   { name: "Swift Charm",     slot: "trinket", rarity: 1, st: { speed: 0.1 } },
+  metro:   { name: "Metronome",       slot: "trinket", rarity: 1, st: { cd: 0.12, stun: 200 } },
+  locket:  { name: "Heart Locket",    slot: "trinket", rarity: 2, st: { hp: 2, dmg: 1 } }
+};
+const ITEM_IDS = Object.keys(ITEMS);
+function gearStats(p) {
+  const t = { dmg: 0, speed: 0, cd: 0, hp: 0, stun: 0, reach: 0, crit: 0 };
+  for (const slot of ["weapon", "head", "trinket"]) { const it = ITEMS[p.equip && p.equip[slot]]; if (it) for (const k in it.st) t[k] += it.st[k]; }
+  return t;
+}
+function rollItem(room, minRarity = 0) {
+  const w = room.stage >= 3 ? [2, 4, 4] : room.stage >= 1 ? [5, 4, 1] : [7, 3, 0.4];
+  let pool = ITEM_IDS.filter(id => ITEMS[id].rarity >= minRarity);
+  const weights = pool.map(id => w[ITEMS[id].rarity]); const tot = weights.reduce((a, b) => a + b, 0);
+  let r = rand(room) * tot; for (let i = 0; i < pool.length; i++) { r -= weights[i]; if (r <= 0) return pool[i]; }
+  return pool[pool.length - 1];
+}
+function giveItem(room, p, id, at) {
+  if (!p || !ITEMS[id]) return;
+  p.inv.push(id);
+  if (!p.equip[ITEMS[id].slot]) { p.inv.splice(p.inv.indexOf(id), 1); p.equip[ITEMS[id].slot] = id; }
+  fx(room, "loot", { x: at ? at.x : p.x, y: at ? at.y : p.y, name: ITEMS[id].name, rarity: ITEMS[id].rarity, pid: p.id });
+}
+const cap = p => MAX_HP + (p.up.hp || 0) + gearStats(p).hp;
+const cdm = p => Math.max(0.35, 1 - 0.2 * (p.up.cd || 0) - gearStats(p).cd);
 function newStats() { return { kills: 0, chests: 0, revives: 0, downs: 0, hearts: 0 }; }
 
 function publicState(room) {
@@ -132,7 +164,7 @@ function publicState(room) {
       facing: p.facing, attacking: now < p.attackUntil, dashing: now < p.dashUntil,
       noteCd: Math.max(0, Math.min(1, (p.lastNote + NOTE_COOLDOWN * cdm(p) - now) / (NOTE_COOLDOWN * cdm(p)))),
       specialCd: Math.max(0, Math.min(1, (p.lastSpecial + SPECIAL_COOLDOWN * cdm(p) - now) / (SPECIAL_COOLDOWN * cdm(p)))),
-      playing: now < (p.noteUntil || 0), guard: now < (p.guardUntil || 0), up: p.up,
+      playing: now < (p.noteUntil || 0), guard: now < (p.guardUntil || 0), up: p.up, inv: p.inv, equip: p.equip, atkKind: p.atkKind, st: gearStats(p),
       hurt: now - p.lastHit < 450, invuln: now - p.lastHit < HIT_INVULN,
       revive: p.alive ? 0 : Math.min(1, p.reviveT / REVIVE_TIME)
     })),
@@ -159,7 +191,7 @@ function resetRoom(room) {
   room.shop = null; room.result = null; room.runStart = Date.now(); room.runEnd = 0;
   if (room.daily) room.rng = mulberry(parseInt(room.daily.replace(/-/g, ""), 10));
   Object.values(room.players).forEach(p => {
-    p.hp = START_HP; p.alive = true; p.reviveT = 0; p.lastHit = 0; p.up = {}; p.stats = newStats();
+    p.hp = START_HP; p.alive = true; p.reviveT = 0; p.lastHit = 0; p.up = {}; p.stats = newStats(); p.inv = []; p.equip = { weapon: null, head: null, trinket: null };
   });
   initStage(room);
 }
@@ -212,7 +244,7 @@ io.on("connection", socket => {
       x: 100 + slot * 55, y: 260, hp: START_HP, alive: true, facing: "right",
       input: { up: false, down: false, left: false, right: false }, attackUntil: 0,
       lastAttack: 0, lastNote: 0, lastSpecial: 0, lastHit: 0, lastDash: 0, dashUntil: 0, dashDir: [1, 0], reviveT: 0,
-      noteUntil: 0, guardUntil: 0, up: {}, stats: newStats()
+      noteUntil: 0, guardUntil: 0, up: {}, stats: newStats(), inv: [], equip: { weapon: null, head: null, trinket: null }, combo: 0, comboAt: 0, nextAttackAt: 0, atkKind: 0
     };
     room.players[sock.id] = player;
     sock.join(room.code);
@@ -250,21 +282,30 @@ io.on("connection", socket => {
   // Primary attack: guitar smash (bard) or wide sword slash (knight).
   socket.on("attack", () => {
     const c = ctx(); if (!c) return; const { room, p, now } = c;
-    const knight = p.cls === "knight";
-    if (now - p.lastAttack < (knight ? 520 : 480)) return;
-    p.lastAttack = now; p.attackUntil = now + 260;
-    fx(room, "swing", { id: p.id });
+    const knight = p.cls === "knight", gs = gearStats(p);
+    if (now < p.nextAttackAt) return;
+    const chain = now - p.comboAt < 800 ? (p.combo + 1) % 3 : 0;
+    p.combo = chain; p.comboAt = now;
+    const lunge = now - p.lastDash < 380;
+    const finisher = chain === 2;
+    p.nextAttackAt = now + (finisher ? 640 : knight ? 400 : 360);
+    p.attackUntil = now + (finisher ? 380 : 260); p.atkKind = lunge ? 3 : chain;
+    fx(room, "swing", { id: p.id, kind: p.atkKind });
     const [dx, dy] = DIRS[p.facing] || [1, 0];
-    const reach = knight ? 116 : 96, width = knight ? 64 : 48, dmg = 2 + (p.up.dmg || 0);
+    const crit = rand(room) * 100 < gs.crit;
+    const reach = (knight ? 116 : 96) + gs.reach + (finisher ? 22 : 0) + (lunge ? 34 : 0), width = (knight ? 64 : 48) + (finisher ? 14 : 0);
+    const dmg = 2 + (p.up.dmg || 0) + gs.dmg + (finisher ? 1 : 0) + (lunge ? 1 : 0) + (crit ? 2 : 0);
+    const kb = finisher ? 70 : 40;
+    if (p.cls) { /* movement burst on swing */ const step = lunge ? 0 : 14; p.x = clampX(p.x + dx * step); p.y = clampY(p.y + dy * step); }
     room.enemies.forEach(e => {
       if (!e.alive) return;
       const big = e.kind === "boss" ? 1 : 0;
       const vx = e.x - p.x, vy = e.y - p.y, along = vx * dx + vy * dy, side = Math.abs(vx * dy - vy * dx);
       if (along >= -8 && along < reach + big * 40 && side < width + big * 34) {
         e.hp -= dmg; e.hitUntil = now + 200; e.windupUntil = big ? e.windupUntil : 0;
-        if (!big) { e.stunUntil = Math.max(e.stunUntil, now + 300); e.x = clampX(e.x + dx * 40); e.y = clampY(e.y + dy * 40); }
+        if (!big) { e.stunUntil = Math.max(e.stunUntil, now + (finisher ? 520 : 300)); e.x = clampX(e.x + dx * kb); e.y = clampY(e.y + dy * kb); }
         if (e.hp <= 0) killEnemy(room, e, p);
-        else fx(room, "hit", { x: e.x, y: e.y });
+        else fx(room, "hit", { x: e.x, y: e.y, crit, big: finisher });
       }
     });
     room.chests.forEach(ch => {
@@ -290,7 +331,7 @@ io.on("connection", socket => {
       const inCone = knight ? (along > -20 && along < 96 && side < 56) : (along > -20 && along < 230 && side < 40 + Math.max(0, along) * 0.45);
       if (!inCone) return;
       const boss = e.kind === "boss";
-      e.stunUntil = now + (boss ? 450 : knight ? 1400 : NOTE_STUN); e.windupUntil = boss ? e.windupUntil : 0; e.castUntil = boss ? e.castUntil : 0; e.hitUntil = now + 120;
+      e.stunUntil = now + (boss ? 450 : (knight ? 1400 : NOTE_STUN) + gearStats(p).stun); e.windupUntil = boss ? e.windupUntil : 0; e.castUntil = boss ? e.castUntil : 0; e.hitUntil = now + 120;
       if (knight) {
         e.hp -= 1; if (!boss) { e.x = clampX(e.x + dx * 70); e.y = clampY(e.y + dy * 70); }
         if (e.hp <= 0) killEnemy(room, e, p);
@@ -325,6 +366,21 @@ io.on("connection", socket => {
     if (!dx && !dy) [dx, dy] = DIRS[p.facing] || [1, 0];
     p.dashDir = [dx, dy]; p.lastDash = now; p.dashUntil = now + DASH_MS;
     fx(room, "dash", { id: p.id, x: p.x, y: p.y });
+  });
+
+  socket.on("equip", id => {
+    const room = rooms.get(socket.data.roomCode); const p = room?.players[socket.id]; const it = ITEMS[id];
+    if (!room || !p || !it || !p.inv.includes(id)) return;
+    p.inv.splice(p.inv.indexOf(id), 1);
+    const old = p.equip[it.slot]; if (old) p.inv.push(old);
+    p.equip[it.slot] = id; p.hp = Math.min(p.hp, cap(p));
+    fx(room, "equipped", { id: p.id }); broadcast(room);
+  });
+  socket.on("unequip", slot => {
+    const room = rooms.get(socket.data.roomCode); const p = room?.players[socket.id];
+    if (!room || !p || !p.equip || !p.equip[slot]) return;
+    p.inv.push(p.equip[slot]); p.equip[slot] = null; p.hp = Math.min(p.hp, cap(p));
+    broadcast(room);
   });
 
   // Shop between rooms.
@@ -369,7 +425,9 @@ function openChest(room, c, p) {
     notice(room, "It was a MIMIC!");
     return;
   }
-  const heart = rand(room) < 0.4 && room.pickups.length < 4;
+  const roll = rand(room);
+  if (roll < 0.3 && p) { const id = rollItem(room); giveItem(room, p, id, c); fx(room, "chest", { x: c.x, y: c.y, loot: "item" }); return; }
+  const heart = roll < 0.6 && room.pickups.length < 4;
   if (heart) room.pickups.push({ id: `c${crypto.randomBytes(3).toString("hex")}`, x: c.x, y: clamp(c.y + 38, 80, ROOM_H - 50) });
   else room.gold += 25;
   fx(room, "chest", { x: c.x, y: c.y, loot: heart ? "heart" : "gold" });
@@ -380,7 +438,8 @@ function killEnemy(room, e, p) {
   if (p) p.stats.kills++;
   room.gold += MOB[e.kind].gold;
   fx(room, "kill", { x: e.x, y: e.y, kind: e.kind });
-  if (e.kind === "boss") { shake(room); room.shots = []; room.enemies.forEach(m => { if (m.alive) { m.alive = false; fx(room, "kill", { x: m.x, y: m.y, kind: m.kind }); } }); notice(room, "The Dragon of Debt is defeated! Reach the exit!"); return; }
+  if (e.kind === "mimic" && p) giveItem(room, p, rollItem(room, 1), e);
+  if (e.kind === "boss") { Object.values(room.players).forEach(pl => giveItem(room, pl, rollItem(room, 2), e)); shake(room); room.shots = []; room.enemies.forEach(m => { if (m.alive) { m.alive = false; fx(room, "kill", { x: m.x, y: m.y, kind: m.kind }); } }); notice(room, "The Dragon of Debt is defeated! Reach the exit!"); return; }
   if (e.keeper && !room.key) {
     room.keyDrop = { x: clamp(e.x, 60, ROOM_W - 90), y: clamp(e.y, 80, ROOM_H - 60) };
     fx(room, "keydrop", room.keyDrop);
@@ -436,7 +495,7 @@ function tick() {
       let dy = (p.input.down ? 1 : 0) - (p.input.up ? 1 : 0);
       if (dashing) [dx, dy] = p.dashDir;
       const mag = Math.hypot(dx, dy) || 1;
-      const speed = dashing ? 520 : 175 * (1 + 0.08 * (p.up.speed || 0));
+      const speed = dashing ? 520 : 175 * (1 + 0.08 * (p.up.speed || 0) + gearStats(p).speed);
       p.x = clampX(p.x + dx / mag * speed * dt);
       p.y = clampY(p.y + dy / mag * speed * dt);
       if (!dashing && (dx || dy)) p.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
@@ -584,5 +643,5 @@ setInterval(tick, 50);
 if (require.main === module) {
   server.listen(PORT, () => console.log(`Dungeon Duo listening on ${PORT}`));
 } else {
-  module.exports = { server, io, rooms, MOB, MAX_HP, roomLayouts, initStage, startRun };   // for automated tests
+  module.exports = { server, io, rooms, MOB, MAX_HP, roomLayouts, initStage, startRun, ITEMS, giveItem };   // for automated tests
 }
