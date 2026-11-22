@@ -72,3 +72,5 @@ This is a small V1 prototype, not a production-hardened game. It uses in-memory 
 - **Shielded skeletons** carry a steel shield that turns plain slashes (1 damage). The whirlwind spin, the overhead pound or any stun breaks their guard, so the full combo matters.
 - **Retry Room**: after a wipe in room 2 or later, both heroes can retry the current room with full hearts and the gold they had on entry. Retried runs are not ranked on the leaderboard.
 - **Hit-stop**: crits, the ground pound and big kills freeze the action for a few frames.
+- **Bomber**: a fast imp carrying a lit bomb. It lights its fuse up close, then blows up in a ring that hurts heroes and any monsters nearby. Kill it first and it just fizzles. Shows up in the Archer Gallery and the Treasure Chamber.
+- **Volume**: separate music and effects sliders under the game (saved in the browser).

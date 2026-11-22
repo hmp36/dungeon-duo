@@ -58,6 +58,7 @@ const MOB = {
   bat:      { hp: 1,  speed: 88, range: 40,  windup: 380, cooldown: 1700, dmg: 1, stop: 26, gold: 4 },
   brute:    { hp: 6,  speed: 30, range: 62,  windup: 650, cooldown: 1900, dmg: 2, stop: 46, gold: 12 },
   archer:   { hp: 2,  speed: 40, range: 0,   windup: 650, cooldown: 2300, dmg: 1, stop: 0,  gold: 6, ranged: true },
+  bomber:   { hp: 2,  speed: 78, range: 62,  windup: 750, cooldown: 1000, dmg: 1, stop: 18, gold: 6 },     // runs in, lights its fuse, blows up (hurts monsters too)
   mimic:    { hp: 4,  speed: 78, range: 46,  windup: 300, cooldown: 1100, dmg: 1, stop: 28, gold: 15 },
   warden:   { hp: 20, speed: 34, range: 80, windup: 700, cooldown: 1700, dmg: 2, stop: 58, gold: 40 },   // mini-boss (drawn as a big gold brute)
   boss:     { hp: 56, speed: 36, range: 108, windup: 900, cooldown: 2300, dmg: 2, stop: 80, gold: 100 }
@@ -66,8 +67,8 @@ const defOf = e => (e.elite ? MOB.warden : MOB[e.kind]);
 const roomLayouts = [
   { name: "Forgotten Entrance", mobs: ["slime", "slime", "slime"], hearts: [[330, 450]], chests: [[700, 100], [120, 470]] },
   { name: "The Crypt", mobs: ["skeleton", "skeleton", "bat", "bat"], keeper: 0, shield: [1], hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]] },
-  { name: "Archer Gallery", mobs: ["archer", "archer", "skeleton", "bat"], shield: [2], hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470], [710, 470]], mimics: 0.3 },
-  { name: "Treasure Chamber", mobs: ["brute", "skeleton", "archer", "bat"], elite: 0, shield: [1], hearts: [[400, 440]], chests: [[60, 90], [140, 90], [660, 90], [740, 90], [60, 470], [740, 470]], mimics: 0.35 },
+  { name: "Archer Gallery", mobs: ["archer", "archer", "skeleton", "bomber"], shield: [2], hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470], [710, 470]], mimics: 0.3 },
+  { name: "Treasure Chamber", mobs: ["brute", "skeleton", "archer", "bat", "bomber"], elite: 0, shield: [1], hearts: [[400, 440]], chests: [[60, 90], [140, 90], [660, 90], [740, 90], [60, 470], [740, 470]], mimics: 0.35 },
   { name: "Dragon of Debt", mobs: ["boss"], hearts: [[300, 460], [500, 460]], chests: [] }
 ];
 const SPAWNS = [[90, 260], [145, 260]];
@@ -615,6 +616,10 @@ function tick() {
             if (def.ranged) {
               const v = room.players[e.windupTarget];
               if (v) fireShot(room, e.x, e.y, Math.atan2(v.y - e.y, v.x - e.x), 260, def.dmg, "arrow");
+            } else if (e.kind === "bomber") {                  // BOOM: hurts heroes and any monsters caught in the blast
+              const BR = 84; e.alive = false; fx(room, "boom", { x: e.x, y: e.y });
+              alive.forEach(v => { if (v.alive && Math.hypot(v.x - e.x, v.y - e.y) < BR && now >= v.dashUntil && now - v.lastHit > HIT_INVULN) hurtPlayer(room, v, def.dmg, e, now); });
+              room.enemies.forEach(m => { if (m.alive && m !== e && Math.hypot(m.x - e.x, m.y - e.y) < BR) { m.hp -= 3; m.hitUntil = now + 200; if (m.hp <= 0) killEnemy(room, m, null); else { m.stunUntil = Math.max(m.stunUntil, now + 500); } } });
             } else {
               const victim = room.players[e.windupTarget];
               if (victim && victim.alive && Math.hypot(victim.x - e.x, victim.y - e.y) < def.range + 14 &&
