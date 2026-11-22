@@ -1,5 +1,7 @@
 const express = require("express");
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
 const { Server } = require("socket.io");
 const crypto = require("crypto");
 
@@ -11,90 +13,141 @@ const PORT = process.env.PORT || 3000;
 app.use(express.static("public"));
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
+/* ------------------------------------------------------------------ leaderboard (best effort file) */
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
+const BOARD_FILE = path.join(DATA_DIR, "leaderboard.json");
+let board = [];
+try { board = JSON.parse(fs.readFileSync(BOARD_FILE, "utf8")); } catch (e) { board = []; }
+function saveBoard() { try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(BOARD_FILE, JSON.stringify(board.slice(0, 500))); } catch (e) { /* ephemeral disk is fine */ } }
+function topBoard(daily) {
+  const today = dailyKey();
+  return board.filter(b => daily ? b.daily === today : !b.daily).sort((a, b) => b.score - a.score).slice(0, 10)
+    .map(b => ({ names: b.names, score: b.score, time: b.time, gold: b.gold }));
+}
+function dailyKey() { return new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" }); }
+app.get("/api/leaderboard", (req, res) => res.json({ daily: dailyKey(), top: topBoard(req.query.daily === "1") }));
+
+/* ------------------------------------------------------------------ constants */
 const rooms = new Map();
 const ROOM_W = 800, ROOM_H = 520;
-const START_HP = 5, MAX_HP = 7;   // heroes start with 5; hearts can top you up to 7
-const REVIVE_TIME = 2.2;       // seconds a teammate must stand next to a fallen hero
-const HIT_INVULN = 1100;       // ms of protection after taking a hit
-const NOTE_COOLDOWN = 4000, NOTE_STUN = 1100;
+const START_HP = 5, MAX_HP = 7;          // heroes start with 5; hearts can top you up to 7 (+ shop containers)
+const REVIVE_TIME = 2.2;
+const HIT_INVULN = 1100;
 const DASH_MS = 170, DASH_COOLDOWN = 1100;
+const NOTE_COOLDOWN = 4000, NOTE_STUN = 1100;
+const SPECIAL_COOLDOWN = 12000;
+const LAST_STAGE = 4;
+const SHOP_ITEMS = {
+  heal:  { cost: 40, max: 99 },
+  hp:    { cost: 60, max: 2 },
+  cd:    { cost: 60, max: 3 },
+  speed: { cost: 50, max: 3 },
+  dmg:   { cost: 120, max: 1 }
+};
+const SHOP_TIME = 45000;
 
-// Monster types. windup = warning time before a hit lands, cooldown = pause between attacks.
 const MOB = {
-  slime:    { hp: 2, speed: 34, range: 46, windup: 520, cooldown: 1500, dmg: 1, stop: 34 },
-  skeleton: { hp: 3, speed: 46, range: 50, windup: 480, cooldown: 1400, dmg: 1, stop: 36 },
-  bat:      { hp: 1, speed: 88, range: 40, windup: 380, cooldown: 1700, dmg: 1, stop: 26 },
-  brute:    { hp: 6, speed: 30, range: 62, windup: 650, cooldown: 1900, dmg: 2, stop: 46 }
+  slime:    { hp: 2,  speed: 34, range: 46,  windup: 520, cooldown: 1500, dmg: 1, stop: 34, gold: 3 },
+  skeleton: { hp: 3,  speed: 46, range: 50,  windup: 480, cooldown: 1400, dmg: 1, stop: 36, gold: 5 },
+  bat:      { hp: 1,  speed: 88, range: 40,  windup: 380, cooldown: 1700, dmg: 1, stop: 26, gold: 4 },
+  brute:    { hp: 6,  speed: 30, range: 62,  windup: 650, cooldown: 1900, dmg: 2, stop: 46, gold: 12 },
+  archer:   { hp: 2,  speed: 40, range: 0,   windup: 650, cooldown: 2300, dmg: 1, stop: 0,  gold: 6, ranged: true },
+  mimic:    { hp: 4,  speed: 78, range: 46,  windup: 300, cooldown: 1100, dmg: 1, stop: 28, gold: 15 },
+  boss:     { hp: 56, speed: 36, range: 108, windup: 900, cooldown: 2300, dmg: 2, stop: 80, gold: 100 }
 };
 const roomLayouts = [
-  { name: "Forgotten Entrance", mobs: ["slime", "slime", "slime"], spawns: [[100, 260], [160, 260]], hearts: [[330, 450]], chests: [[700, 100], [120, 470]] },
-  { name: "The Crypt", mobs: ["skeleton", "skeleton", "bat", "bat"], keeper: 0, spawns: [[90, 260], [145, 260]], hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]] },
-  { name: "Treasure Chamber", mobs: ["brute", "skeleton", "bat"], spawns: [[90, 260], [145, 260]], hearts: [[400, 440]], chests: [[60, 90], [140, 90], [660, 90], [740, 90], [60, 470], [740, 470]] }
+  { name: "Forgotten Entrance", mobs: ["slime", "slime", "slime"], hearts: [[330, 450]], chests: [[700, 100], [120, 470]] },
+  { name: "The Crypt", mobs: ["skeleton", "skeleton", "bat", "bat"], keeper: 0, hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]] },
+  { name: "Archer Gallery", mobs: ["archer", "archer", "skeleton", "bat"], hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470], [710, 470]], mimics: 0.3 },
+  { name: "Treasure Chamber", mobs: ["brute", "skeleton", "archer", "bat"], hearts: [[400, 440]], chests: [[60, 90], [140, 90], [660, 90], [740, 90], [60, 470], [740, 470]], mimics: 0.35 },
+  { name: "Dragon of Debt", mobs: ["boss"], hearts: [[300, 460], [500, 460]], chests: [] }
 ];
+const SPAWNS = [[90, 260], [145, 260]];
 const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const clampX = x => clamp(x, 28, ROOM_W - 28);
 const clampY = y => clamp(y, 55, ROOM_H - 28);
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const rand = room => room.rng ? room.rng() : Math.random();
 
-// Six characters, no 0/O/1/I/L so codes are easy to read and type on a phone.
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-function makeCode() {
-  let c = "";
-  for (let i = 0; i < 6; i++) c += CODE_CHARS[crypto.randomInt(CODE_CHARS.length)];
-  return c;
-}
+function makeCode() { let c = ""; for (let i = 0; i < 6; i++) c += CODE_CHARS[crypto.randomInt(CODE_CHARS.length)]; return c; }
 
-function makeRoom(code) {
+/* ------------------------------------------------------------------ rooms */
+function makeRoom(code, daily) {
+  const seed = daily ? parseInt(dailyKey().replace(/-/g, ""), 10) : 0;
   return {
     code, players: {}, stage: 0, key: false, keyDrop: null, finished: false, gameOver: false,
-    started: false, doorWas: false, enemies: [], pickups: [], chests: [], gold: 0
+    started: false, doorWas: false, enemies: [], pickups: [], chests: [], shots: [], gold: 0,
+    shop: null, daily: daily ? dailyKey() : null, rng: daily ? mulberry(seed) : null,
+    runStart: 0, runEnd: 0, result: null, lockedNoticed: false
   };
+}
+let eid = 0;
+function newEnemy(room, kind, x, y, extra = {}) {
+  return Object.assign({
+    id: `e${++eid}`, kind, x, y, hp: MOB[kind].hp, maxHp: MOB[kind].hp, alive: true, keeper: false,
+    activeAt: Date.now() + 500, windupUntil: 0, windupTarget: null, nextAttackAt: 0, retreatUntil: 0,
+    stunUntil: 0, hitUntil: 0, phase: Math.random() * 6.28, castUntil: 0, nextSpecialAt: Date.now() + 4000, phaseN: 1
+  }, extra);
 }
 function makeEnemies(stage, graceMs) {
   const layout = roomLayouts[stage], now = Date.now();
-  return layout.mobs.map((kind, i) => ({
-    id: `${stage}-${i}-${crypto.randomBytes(3).toString("hex")}`, kind,
-    x: 430 + (i % 2) * 105, y: 115 + Math.floor(i / 2) * 155,
-    hp: MOB[kind].hp, maxHp: MOB[kind].hp, alive: true, keeper: layout.keeper === i,
-    activeAt: now + graceMs, windupUntil: 0, windupTarget: null, nextAttackAt: 0,
-    retreatUntil: 0, stunUntil: 0, hitUntil: 0, phase: Math.random() * 6.28
-  }));
+  if (layout.mobs[0] === "boss") return [newEnemy(null, "boss", 600, 240, { activeAt: now + graceMs + 800 })];
+  return layout.mobs.map((kind, i) => newEnemy(null, kind, 430 + (i % 2) * 105, 115 + Math.floor(i / 2) * 155,
+    { keeper: layout.keeper === i, activeAt: now + graceMs }));
 }
 function initStage(room) {
   room.enemies = makeEnemies(room.stage, 1600);
-  room.pickups = roomLayouts[room.stage].hearts.map(([x, y], i) => ({ id: `h${room.stage}-${i}`, x, y }));
-  room.chests = roomLayouts[room.stage].chests.map(([x, y], i) => ({ id: `c${room.stage}-${i}`, x, y, open: false }));
-  room.keyDrop = null;
-  room.doorWas = false;
-  const spawns = roomLayouts[room.stage].spawns;
+  room.shots = [];
+  const layout = roomLayouts[room.stage];
+  room.pickups = layout.hearts.map(([x, y], i) => ({ id: `h${room.stage}-${i}`, x, y }));
+  room.chests = layout.chests.map(([x, y], i) => ({ id: `c${room.stage}-${i}`, x, y, open: false, mimic: !!layout.mimics && rand(room) < layout.mimics }));
+  room.keyDrop = null; room.doorWas = false; room.lockedNoticed = false;
   Object.values(room.players).forEach(p => {
-    const s = spawns[p.slot] || spawns[0];
-    p.x = s[0]; p.y = s[1]; p.attackUntil = 0; p.dashUntil = 0;
+    const s = SPAWNS[p.slot] || SPAWNS[0];
+    p.x = s[0]; p.y = s[1]; p.attackUntil = 0; p.dashUntil = 0; p.noteUntil = 0;
     p.input = { up: false, down: false, left: false, right: false };
   });
 }
+function startRun(room, grace) {
+  room.started = true; room.runStart = Date.now();
+  room.enemies.forEach(e => { e.activeAt = Date.now() + grace; });
+}
+const cap = p => MAX_HP + (p.up.hp || 0);
+const cdm = p => 1 - 0.2 * (p.up.cd || 0);
+function newStats() { return { kills: 0, chests: 0, revives: 0, downs: 0, hearts: 0 }; }
+
 function publicState(room) {
   const now = Date.now();
   const cleared = room.enemies.every(e => !e.alive);
+  const alive = e => e.alive;
   return {
-    code: room.code, stage: room.stage, key: room.key, finished: room.finished,
-    gameOver: room.gameOver, maxHp: MAX_HP, waiting: !room.started,
+    code: room.code, stage: room.stage, key: room.key, finished: room.finished, gameOver: room.gameOver,
+    waiting: !room.started, daily: room.daily, lastStage: LAST_STAGE, roomName: roomLayouts[room.stage].name,
     keyDrop: room.keyDrop,
     players: Object.values(room.players).map(p => ({
-      id: p.id, name: p.name, slot: p.slot, x: p.x, y: p.y, hp: p.hp, alive: p.alive,
+      id: p.id, name: p.name, slot: p.slot, cls: p.cls, x: p.x, y: p.y, hp: p.hp, cap: cap(p), alive: p.alive,
       facing: p.facing, attacking: now < p.attackUntil, dashing: now < p.dashUntil,
-      noteCd: Math.max(0, Math.min(1, (p.lastNote + NOTE_COOLDOWN - now) / NOTE_COOLDOWN)), playing: now < (p.noteUntil || 0), hurt: now - p.lastHit < 450, invuln: now - p.lastHit < HIT_INVULN,
+      noteCd: Math.max(0, Math.min(1, (p.lastNote + NOTE_COOLDOWN * cdm(p) - now) / (NOTE_COOLDOWN * cdm(p)))),
+      specialCd: Math.max(0, Math.min(1, (p.lastSpecial + SPECIAL_COOLDOWN * cdm(p) - now) / (SPECIAL_COOLDOWN * cdm(p)))),
+      playing: now < (p.noteUntil || 0), guard: now < (p.guardUntil || 0), up: p.up,
+      hurt: now - p.lastHit < 450, invuln: now - p.lastHit < HIT_INVULN,
       revive: p.alive ? 0 : Math.min(1, p.reviveT / REVIVE_TIME)
     })),
-    enemies: room.enemies.map(e => ({
-      id: e.id, kind: e.kind, x: e.x, y: e.y, hp: e.hp, maxHp: e.maxHp, alive: e.alive,
-      keeper: e.keeper && !room.key && !room.keyDrop,
-      hurt: now < e.hitUntil, stunned: now < e.stunUntil, winding: e.windupUntil > now, dormant: now < e.activeAt || !room.started
+    enemies: room.enemies.filter(alive).map(e => ({
+      id: e.id, kind: e.kind, x: e.x, y: e.y, hp: e.hp, maxHp: e.maxHp, alive: true,
+      keeper: e.keeper && !room.key && !room.keyDrop, hurt: now < e.hitUntil, stunned: now < e.stunUntil,
+      winding: e.windupUntil > now || e.castUntil > now, dormant: now < e.activeAt || !room.started,
+      phase: e.phaseN
     })),
-    pickups: room.pickups, chests: room.chests, gold: room.gold,
-    enemyCount: room.enemies.filter(e => e.alive).length,
-    doorOpen: cleared && (room.stage === 0 || room.key)
+    shots: room.shots.map(s => ({ x: Math.round(s.x), y: Math.round(s.y), a: Math.atan2(s.vy, s.vx), k: s.kind })),
+    pickups: room.pickups, chests: room.chests.map(c => ({ id: c.id, x: c.x, y: c.y, open: c.open })), gold: room.gold,
+    enemyCount: room.enemies.filter(alive).length,
+    doorOpen: cleared && (room.stage === 0 || room.key),
+    shop: room.shop ? { ready: [...room.shop.ready], left: Math.max(0, Math.ceil((room.shop.until - now) / 1000)) } : null,
+    result: room.result
   };
 }
 function broadcast(room) { io.to(room.code).emit("state", publicState(room)); }
@@ -103,64 +156,87 @@ function notice(room, msg) { io.to(room.code).emit("notice", msg); }
 
 function resetRoom(room) {
   room.stage = 0; room.gold = 0; room.key = false; room.keyDrop = null; room.finished = false; room.gameOver = false;
+  room.shop = null; room.result = null; room.runStart = Date.now(); room.runEnd = 0;
+  if (room.daily) room.rng = mulberry(parseInt(room.daily.replace(/-/g, ""), 10));
   Object.values(room.players).forEach(p => {
-    p.hp = START_HP; p.alive = true; p.reviveT = 0; p.lastHit = 0;
+    p.hp = START_HP; p.alive = true; p.reviveT = 0; p.lastHit = 0; p.up = {}; p.stats = newStats();
   });
   initStage(room);
 }
 
+function finishRun(room) {
+  room.finished = true; room.runEnd = Date.now();
+  const time = Math.round((room.runEnd - room.runStart) / 1000);
+  const ps = Object.values(room.players);
+  const kills = ps.reduce((a, p) => a + p.stats.kills, 0), downs = ps.reduce((a, p) => a + p.stats.downs, 0);
+  const score = Math.max(0, 3000 + Math.max(0, 3000 - time * 4) + room.gold * 10 + kills * 25 - downs * 150);
+  const names = ps.map(p => p.name).join(" & ");
+  board.push({ names, score, time, gold: room.gold, daily: room.daily, ts: Date.now() });
+  saveBoard();
+  room.result = {
+    time, score, gold: room.gold, kills, downs, daily: room.daily,
+    players: ps.map(p => ({ name: p.name, cls: p.cls, ...p.stats })),
+    top: topBoard(!!room.daily)
+  };
+  fx(room, "win");
+  notice(room, "The team escaped the dungeon!");
+}
+
+/* ------------------------------------------------------------------ sockets */
 io.on("connection", socket => {
-  socket.on("createRoom", ({ name } = {}, cb = () => {}) => {
+  const cleanCls = c => (c === "knight" ? "knight" : "bard");
+  socket.on("createRoom", ({ name, cls, daily } = {}, cb = () => {}) => {
     let code;
     do { code = makeCode(); } while (rooms.has(code));
-    const room = makeRoom(code);
+    const room = makeRoom(code, !!daily);
     rooms.set(code, room);
-    joinRoom(socket, room, name, cb);
+    joinRoom(socket, room, name, cls, cb);
   });
 
-  socket.on("joinRoom", ({ code, name } = {}, cb = () => {}) => {
+  socket.on("joinRoom", ({ code, name, cls } = {}, cb = () => {}) => {
     code = String(code || "").trim().toUpperCase();
     const room = rooms.get(code);
     if (!room) return cb({ ok: false, error: "Room not found. Check the code or create a new room." });
     if (Object.keys(room.players).length >= 2) return cb({ ok: false, error: "That room already has two players." });
     if (room.finished || room.gameOver) resetRoom(room);
-    joinRoom(socket, room, name, cb);
+    joinRoom(socket, room, name, cls, cb);
   });
 
-  function joinRoom(sock, room, name, cb) {
+  function joinRoom(sock, room, name, cls, cb) {
     if (Object.keys(room.players).length >= 2) return cb({ ok: false, error: "That room is full." });
     const used = Object.values(room.players).map(p => p.slot);
     const slot = used.includes(0) ? 1 : 0;
     const index = Object.keys(room.players).length;
     const player = {
-      id: sock.id, name: String(name || `Player ${index + 1}`).slice(0, 18), slot,
+      id: sock.id, name: String(name || `Player ${index + 1}`).slice(0, 18), slot, cls: cleanCls(cls),
       x: 100 + slot * 55, y: 260, hp: START_HP, alive: true, facing: "right",
       input: { up: false, down: false, left: false, right: false }, attackUntil: 0,
-      lastAttack: 0, lastNote: 0, lastHit: 0, lastDash: 0, dashUntil: 0, dashDir: [1, 0], reviveT: 0
+      lastAttack: 0, lastNote: 0, lastSpecial: 0, lastHit: 0, lastDash: 0, dashUntil: 0, dashDir: [1, 0], reviveT: 0,
+      noteUntil: 0, guardUntil: 0, up: {}, stats: newStats()
     };
     room.players[sock.id] = player;
     sock.join(room.code);
     sock.data.roomCode = room.code;
     if (Object.keys(room.players).length === 1) initStage(room);
-    else if (!room.started) {
-      // Teammate arrived: wake the monsters, with a short grace period.
-      room.started = true;
-      room.enemies.forEach(e => { e.activeAt = Date.now() + 2200; });
-    }
-    cb({ ok: true, code: room.code, playerId: sock.id, playerNumber: index + 1 });
+    else if (!room.started) startRun(room, 2200);
+    cb({ ok: true, code: room.code, playerId: sock.id, playerNumber: index + 1, daily: room.daily });
     notice(room, `${player.name} joined (${index + 1}/2).`);
     broadcast(room);
   }
 
-  // Solo test mode: start without waiting for a teammate.
   socket.on("startSolo", () => {
     const room = rooms.get(socket.data.roomCode);
     if (!room || room.started) return;
-    room.started = true;
-    room.enemies.forEach(e => { e.activeAt = Date.now() + 2200; });
+    startRun(room, 2200);
     notice(room, "Solo run started. Good luck!");
     broadcast(room);
   });
+
+  const ctx = () => {
+    const room = rooms.get(socket.data.roomCode); const p = room?.players[socket.id];
+    if (!p || !p.alive || room.finished || room.gameOver || room.shop) return null;
+    return { room, p, now: Date.now() };
+  };
 
   socket.on("input", data => {
     const room = rooms.get(socket.data.roomCode);
@@ -171,62 +247,79 @@ io.on("connection", socket => {
     if (keys.facing && DIRS[keys.facing]) p.facing = keys.facing;
   });
 
+  // Primary attack: guitar smash (bard) or wide sword slash (knight).
   socket.on("attack", () => {
-    const room = rooms.get(socket.data.roomCode);
-    const p = room?.players[socket.id];
-    if (!p || !p.alive || room.finished || room.gameOver) return;
-    const now = Date.now();
-    if (now - p.lastAttack < 480) return;
+    const c = ctx(); if (!c) return; const { room, p, now } = c;
+    const knight = p.cls === "knight";
+    if (now - p.lastAttack < (knight ? 520 : 480)) return;
     p.lastAttack = now; p.attackUntil = now + 260;
     fx(room, "swing", { id: p.id });
     const [dx, dy] = DIRS[p.facing] || [1, 0];
+    const reach = knight ? 116 : 96, width = knight ? 64 : 48, dmg = 2 + (p.up.dmg || 0);
     room.enemies.forEach(e => {
       if (!e.alive) return;
-      const vx = e.x - p.x, vy = e.y - p.y;
-      const along = vx * dx + vy * dy, side = Math.abs(vx * dy - vy * dx);
-      if (along >= -8 && along < 96 && side < 48) {
-        e.hp -= 2; e.hitUntil = now + 200; e.stunUntil = Math.max(e.stunUntil, now + 300);
-        e.windupUntil = 0;                       // a hit interrupts the monster's attack
-        e.x = clampX(e.x + dx * 40); e.y = clampY(e.y + dy * 40);
-        if (e.hp <= 0) killEnemy(room, e);
+      const big = e.kind === "boss" ? 1 : 0;
+      const vx = e.x - p.x, vy = e.y - p.y, along = vx * dx + vy * dy, side = Math.abs(vx * dy - vy * dx);
+      if (along >= -8 && along < reach + big * 40 && side < width + big * 34) {
+        e.hp -= dmg; e.hitUntil = now + 200; e.windupUntil = big ? e.windupUntil : 0;
+        if (!big) { e.stunUntil = Math.max(e.stunUntil, now + 300); e.x = clampX(e.x + dx * 40); e.y = clampY(e.y + dy * 40); }
+        if (e.hp <= 0) killEnemy(room, e, p);
         else fx(room, "hit", { x: e.x, y: e.y });
       }
     });
-    room.chests.forEach(c => {
-      if (c.open) return;
-      const vx = c.x - p.x, vy = c.y - p.y, along = vx * dx + vy * dy, side = Math.abs(vx * dy - vy * dx);
-      if (along >= -20 && along < 100 && side < 50) openChest(room, c);
+    room.chests.forEach(ch => {
+      if (ch.open) return;
+      const vx = ch.x - p.x, vy = ch.y - p.y, along = vx * dx + vy * dy, side = Math.abs(vx * dy - vy * dx);
+      if (along >= -20 && along < 100 && side < 50) openChest(room, ch, p);
     });
     broadcast(room);
   });
 
-  // Guitar riff: a wave of music notes that stuns every monster in front of you.
+  // Secondary: bard riff (stun cone) or knight shield bash (short stun + knockback).
   socket.on("note", () => {
-    const room = rooms.get(socket.data.roomCode);
-    const p = room?.players[socket.id];
-    if (!p || !p.alive || room.finished || room.gameOver) return;
-    const now = Date.now();
-    if (now - p.lastNote < NOTE_COOLDOWN) return;
+    const c = ctx(); if (!c) return; const { room, p, now } = c;
+    const cd = NOTE_COOLDOWN * cdm(p) * (p.cls === "knight" ? 0.85 : 1);
+    if (now - p.lastNote < cd) return;
     p.lastNote = now; p.noteUntil = now + 600;
     const [dx, dy] = DIRS[p.facing] || [1, 0];
-    fx(room, "notes", { id: p.id, x: p.x, y: p.y, facing: p.facing });
+    const knight = p.cls === "knight";
+    fx(room, knight ? "bash" : "notes", { id: p.id, x: p.x, y: p.y, facing: p.facing });
     room.enemies.forEach(e => {
       if (!e.alive) return;
       const vx = e.x - p.x, vy = e.y - p.y, along = vx * dx + vy * dy, side = Math.abs(vx * dy - vy * dx);
-      if (along > -20 && along < 230 && side < 40 + Math.max(0, along) * 0.45) {
-        e.stunUntil = now + NOTE_STUN; e.windupUntil = 0; e.hitUntil = now + 120;
-        fx(room, "stun", { x: e.x, y: e.y });
+      const inCone = knight ? (along > -20 && along < 96 && side < 56) : (along > -20 && along < 230 && side < 40 + Math.max(0, along) * 0.45);
+      if (!inCone) return;
+      const boss = e.kind === "boss";
+      e.stunUntil = now + (boss ? 450 : knight ? 1400 : NOTE_STUN); e.windupUntil = boss ? e.windupUntil : 0; e.castUntil = boss ? e.castUntil : 0; e.hitUntil = now + 120;
+      if (knight) {
+        e.hp -= 1; if (!boss) { e.x = clampX(e.x + dx * 70); e.y = clampY(e.y + dy * 70); }
+        if (e.hp <= 0) killEnemy(room, e, p);
       }
+      fx(room, "stun", { x: e.x, y: e.y });
     });
+    broadcast(room);
+  });
+
+  // Special: bard healing song (heals nearby heroes) or knight guard (brief immunity).
+  socket.on("special", () => {
+    const c = ctx(); if (!c) return; const { room, p, now } = c;
+    if (now - p.lastSpecial < SPECIAL_COOLDOWN * cdm(p)) return;
+    p.lastSpecial = now;
+    if (p.cls === "knight") {
+      p.guardUntil = now + 2000;
+      fx(room, "guard", { id: p.id, x: p.x, y: p.y });
+    } else {
+      fx(room, "song", { id: p.id, x: p.x, y: p.y });
+      Object.values(room.players).forEach(t => {
+        if (t.alive && Math.hypot(t.x - p.x, t.y - p.y) < 190 && t.hp < cap(t)) { t.hp++; p.stats.hearts++; fx(room, "heal", { x: t.x, y: t.y - 10 }); }
+      });
+    }
     broadcast(room);
   });
 
   socket.on("dash", () => {
-    const room = rooms.get(socket.data.roomCode);
-    const p = room?.players[socket.id];
-    if (!p || !p.alive || room.finished || room.gameOver) return;
-    const now = Date.now();
-    if (now - p.lastDash < DASH_COOLDOWN) return;
+    const c = ctx(); if (!c) return; const { room, p, now } = c;
+    if (now - p.lastDash < DASH_COOLDOWN * cdm(p)) return;
     let dx = (p.input.right ? 1 : 0) - (p.input.left ? 1 : 0);
     let dy = (p.input.down ? 1 : 0) - (p.input.up ? 1 : 0);
     if (!dx && !dy) [dx, dy] = DIRS[p.facing] || [1, 0];
@@ -234,48 +327,86 @@ io.on("connection", socket => {
     fx(room, "dash", { id: p.id, x: p.x, y: p.y });
   });
 
+  // Shop between rooms.
+  socket.on("buy", item => {
+    const room = rooms.get(socket.data.roomCode); const p = room?.players[socket.id];
+    const def = SHOP_ITEMS[item];
+    if (!room || !p || !room.shop || !def) return;
+    if (item !== "heal" && (p.up[item] || 0) >= def.max) return;
+    if (room.gold < def.cost) return;
+    room.gold -= def.cost;
+    if (item === "heal") Object.values(room.players).forEach(t => { t.hp = cap(t); t.alive = true; });
+    else { p.up[item] = (p.up[item] || 0) + 1; if (item === "hp") p.hp = Math.min(cap(p), p.hp + 1); }
+    fx(room, "buy", { id: p.id });
+    broadcast(room);
+  });
+  socket.on("ready", () => {
+    const room = rooms.get(socket.data.roomCode);
+    if (!room || !room.shop || !room.players[socket.id]) return;
+    room.shop.ready.add(socket.id);
+    broadcast(room);
+  });
+
   socket.on("disconnect", () => {
     const code = socket.data.roomCode;
     const room = rooms.get(code);
     if (!room) return;
     delete room.players[socket.id];
+    if (room.shop) room.shop.ready.delete(socket.id);
     notice(room, "A player disconnected. The room is waiting for them to reconnect or for a new game.");
     if (Object.keys(room.players).length === 0) rooms.delete(code);
     else broadcast(room);
   });
 });
 
-function openChest(room, c) {
+/* ------------------------------------------------------------------ game logic */
+function openChest(room, c, p) {
   c.open = true;
-  const heart = Math.random() < 0.4 && room.pickups.length < 4;
+  if (p) p.stats.chests++;
+  if (c.mimic) {
+    room.enemies.push(newEnemy(room, "mimic", c.x, clamp(c.y + 10, 80, ROOM_H - 50), { activeAt: Date.now() + 350 }));
+    fx(room, "mimic", { x: c.x, y: c.y });
+    notice(room, "It was a MIMIC!");
+    return;
+  }
+  const heart = rand(room) < 0.4 && room.pickups.length < 4;
   if (heart) room.pickups.push({ id: `c${crypto.randomBytes(3).toString("hex")}`, x: c.x, y: clamp(c.y + 38, 80, ROOM_H - 50) });
   else room.gold += 25;
   fx(room, "chest", { x: c.x, y: c.y, loot: heart ? "heart" : "gold" });
 }
 
-function killEnemy(room, e) {
+function killEnemy(room, e, p) {
   e.alive = false;
+  if (p) p.stats.kills++;
+  room.gold += MOB[e.kind].gold;
   fx(room, "kill", { x: e.x, y: e.y, kind: e.kind });
+  if (e.kind === "boss") { shake(room); room.shots = []; room.enemies.forEach(m => { if (m.alive) { m.alive = false; fx(room, "kill", { x: m.x, y: m.y, kind: m.kind }); } }); notice(room, "The Dragon of Debt is defeated! Reach the exit!"); return; }
   if (e.keeper && !room.key) {
     room.keyDrop = { x: clamp(e.x, 60, ROOM_W - 90), y: clamp(e.y, 80, ROOM_H - 60) };
     fx(room, "keydrop", room.keyDrop);
     notice(room, "The Keeper dropped the dungeon key! Grab it.");
-  } else if (Math.random() < 0.6 && room.pickups.length < 3) {
+  } else if (rand(room) < 0.6 && room.pickups.length < 3) {
     room.pickups.push({ id: `d${crypto.randomBytes(3).toString("hex")}`, x: clamp(e.x, 50, ROOM_W - 50), y: clamp(e.y, 80, ROOM_H - 50) });
   }
 }
+function shake(room) { fx(room, "bigshake"); }
 
 function hurtPlayer(room, p, dmg, from, now) {
+  if (now < (p.guardUntil || 0)) { fx(room, "blocked", { x: p.x, y: p.y }); return; }
   p.hp = Math.max(0, p.hp - dmg); p.lastHit = now;
   const dx = p.x - from.x, dy = p.y - from.y, d = Math.hypot(dx, dy) || 1;
-  p.x = clampX(p.x + dx / d * 46); p.y = clampY(p.y + dy / d * 46);   // knockback
+  p.x = clampX(p.x + dx / d * 46); p.y = clampY(p.y + dy / d * 46);
   fx(room, "hurt", { id: p.id, x: p.x, y: p.y, dmg });
   if (p.hp === 0) {
-    p.alive = false; p.reviveT = 0;
+    p.alive = false; p.reviveT = 0; p.stats.downs++;
     p.input = { up: false, down: false, left: false, right: false };
     fx(room, "down", { x: p.x, y: p.y });
     notice(room, `${p.name} is down! Stand next to them for ${REVIVE_TIME.toFixed(0)} seconds to revive.`);
   }
+}
+
+function fireShot(room, x, y, ang, speed = 230, dmg = 1, kind = "arrow") {
+  room.shots.push({ x, y, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 3200, dmg, kind });
 }
 
 function tick() {
@@ -283,64 +414,125 @@ function tick() {
   for (const room of rooms.values()) {
     if (room.finished || room.gameOver || Object.keys(room.players).length < 1) continue;
     const all = Object.values(room.players);
+
+    // Shop phase: nothing moves; wait for ready or timeout.
+    if (room.shop) {
+      const everyone = all.every(p => room.shop.ready.has(p.id));
+      if (everyone || now > room.shop.until) {
+        room.shop = null; room.stage++; initStage(room);
+        fx(room, "stage", { stage: room.stage });
+        notice(room, `Room ${room.stage + 1}: ${roomLayouts[room.stage].name}`);
+        room.enemies.forEach(e => { e.activeAt = Date.now() + 1800; });
+      }
+      broadcast(room); continue;
+    }
+
     let alive = all.filter(p => p.alive);
     if (alive.length === 0) { room.gameOver = true; fx(room, "gameover"); broadcast(room); continue; }
 
-    // Player movement (dash overrides input for a moment).
     for (const p of alive) {
       const dashing = now < p.dashUntil;
       let dx = (p.input.right ? 1 : 0) - (p.input.left ? 1 : 0);
       let dy = (p.input.down ? 1 : 0) - (p.input.up ? 1 : 0);
       if (dashing) [dx, dy] = p.dashDir;
       const mag = Math.hypot(dx, dy) || 1;
-      const speed = dashing ? 520 : 175;
+      const speed = dashing ? 520 : 175 * (1 + 0.08 * (p.up.speed || 0));
       p.x = clampX(p.x + dx / mag * speed * dt);
       p.y = clampY(p.y + dy / mag * speed * dt);
       if (!dashing && (dx || dy)) p.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
     }
 
-    // Monsters (asleep until a teammate arrives or solo is chosen).
     if (room.started) {
-      for (const e of room.enemies) {
+      for (const e of room.enemies.slice()) {
         if (!e.alive || now < e.activeAt || now < e.stunUntil) continue;
         const def = MOB[e.kind];
         const target = alive.reduce((b, p) => Math.hypot(p.x - e.x, p.y - e.y) < Math.hypot(b.x - e.x, b.y - e.y) ? p : b, alive[0]);
         const dx = target.x - e.x, dy = target.y - e.y, d = Math.hypot(dx, dy) || 1;
+        const boss = e.kind === "boss";
+        let speedMul = 1, cdMul = 1;
 
-        if (e.windupUntil) {                       // winding up: stand still, then strike
+        if (boss) {
+          const frac = e.hp / e.maxHp, ph = frac > 0.66 ? 1 : frac > 0.33 ? 2 : 3;
+          if (ph > e.phaseN) {
+            e.phaseN = ph; fx(room, "bossphase", { phase: ph, x: e.x, y: e.y });
+            if (ph === 2) { room.enemies.push(newEnemy(room, "slime", 640, 130), newEnemy(room, "slime", 640, 400)); notice(room, "The Dragon summons slimes!"); }
+            if (ph === 3) { room.enemies.push(newEnemy(room, "bat", 640, 120), newEnemy(room, "bat", 640, 410)); notice(room, "The Dragon is enraged!"); }
+            e.nextSpecialAt = now + 1500;
+          }
+          speedMul = 1 + 0.3 * (ph - 1); cdMul = 1 - 0.18 * (ph - 1);
+          if (e.castUntil) {
+            if (now >= e.castUntil) {
+              e.castUntil = 0; e.nextSpecialAt = now + (ph === 3 ? 3600 : 5200);
+              const base = Math.atan2(dy, dx);
+              if (ph === 2) for (let i = -2; i <= 2; i++) fireShot(room, e.x, e.y, base + i * 0.28, 210, 1, "fire");
+              else for (let i = 0; i < 10; i++) fireShot(room, e.x, e.y, base + i * (Math.PI * 2 / 10), 200, 1, "fire");
+              fx(room, "bossfire", { x: e.x, y: e.y });
+            }
+            continue;
+          }
+          if (ph >= 2 && now >= e.nextSpecialAt && !e.windupUntil) { e.castUntil = now + 800; continue; }
+        }
+
+        if (e.windupUntil) {
           if (now >= e.windupUntil) {
-            e.windupUntil = 0; e.nextAttackAt = now + def.cooldown; e.retreatUntil = now + 650;
-            const victim = room.players[e.windupTarget];
-            if (victim && victim.alive && Math.hypot(victim.x - e.x, victim.y - e.y) < def.range + 14 &&
-                now >= victim.dashUntil && now - victim.lastHit > HIT_INVULN) {
-              hurtPlayer(room, victim, def.dmg, e, now);
+            e.windupUntil = 0; e.nextAttackAt = now + def.cooldown * cdMul; e.retreatUntil = boss ? 0 : now + 650;
+            if (def.ranged) {
+              const v = room.players[e.windupTarget];
+              if (v) fireShot(room, e.x, e.y, Math.atan2(v.y - e.y, v.x - e.x), 260, def.dmg, "arrow");
+            } else {
+              const victim = room.players[e.windupTarget];
+              if (victim && victim.alive && Math.hypot(victim.x - e.x, victim.y - e.y) < def.range + 14 &&
+                  now >= victim.dashUntil && now - victim.lastHit > HIT_INVULN) {
+                hurtPlayer(room, victim, def.dmg, e, now);
+              }
+              if (boss) fx(room, "slam", { x: e.x, y: e.y });
+              // The slam hits the other hero too if they're in range.
+              if (boss) alive.forEach(v => {
+                if (v.id !== e.windupTarget && v.alive && Math.hypot(v.x - e.x, v.y - e.y) < def.range + 14 && now >= v.dashUntil && now - v.lastHit > HIT_INVULN) hurtPlayer(room, v, def.dmg, e, now);
+              });
             }
           }
           continue;
         }
-        if (now < e.retreatUntil) {                // back off after attacking
+        if (now < e.retreatUntil) {
           e.x = clampX(e.x - dx / d * def.speed * 0.8 * dt);
           e.y = clampY(e.y - dy / d * def.speed * 0.8 * dt);
           continue;
         }
         let mx = dx / d, my = dy / d;
-        if (e.kind === "bat") {                    // erratic flutter
+        if (e.kind === "bat") {
           const w = Math.sin(now / 170 + e.phase) * 0.9;
           mx += -dy / d * w; my += dx / d * w;
           const m = Math.hypot(mx, my) || 1; mx /= m; my /= m;
         }
-        if (d > def.stop) { e.x = clampX(e.x + mx * def.speed * dt); e.y = clampY(e.y + my * def.speed * dt); }
+        if (def.ranged) {                          // archers keep their distance
+          if (d < 170) { e.x = clampX(e.x - mx * def.speed * 1.2 * dt); e.y = clampY(e.y - my * def.speed * 1.2 * dt); }
+          else if (d > 300) { e.x = clampX(e.x + mx * def.speed * dt); e.y = clampY(e.y + my * def.speed * dt); }
+          if (now >= e.nextAttackAt && d < 420) { e.windupUntil = now + def.windup; e.windupTarget = target.id; }
+          continue;
+        }
+        if (d > def.stop) { e.x = clampX(e.x + mx * def.speed * speedMul * dt); e.y = clampY(e.y + my * def.speed * speedMul * dt); }
         if (d < def.range && now >= e.nextAttackAt) { e.windupUntil = now + def.windup; e.windupTarget = target.id; }
       }
     }
 
-    // Revive: stand next to a fallen teammate.
+    // Projectiles.
+    room.shots = room.shots.filter(s => {
+      s.life -= 50; s.x += s.vx * dt; s.y += s.vy * dt;
+      if (s.life <= 0 || s.x < 18 || s.x > ROOM_W - 18 || s.y < 54 || s.y > ROOM_H - 18) return false;
+      const hit = alive.find(p => Math.hypot(p.x - s.x, p.y - s.y) < 20 && now >= p.dashUntil && now - p.lastHit > HIT_INVULN);
+      if (hit) { hurtPlayer(room, hit, s.dmg, s, now); return false; }
+      return true;
+    });
+
+    // Revive.
     for (const p of all) {
       if (p.alive) continue;
-      const helper = alive.some(a => Math.hypot(a.x - p.x, a.y - p.y) < 50);
+      const helper = alive.find(a => Math.hypot(a.x - p.x, a.y - p.y) < 50);
       p.reviveT = helper ? p.reviveT + dt : Math.max(0, p.reviveT - dt * 2);
       if (p.reviveT >= REVIVE_TIME) {
         p.alive = true; p.hp = 2; p.reviveT = 0; p.lastHit = now;
+        if (helper) helper.stats.revives++;
         fx(room, "revive", { x: p.x, y: p.y });
         notice(room, `${p.name} is back on their feet!`);
       }
@@ -348,23 +540,20 @@ function tick() {
     alive = all.filter(p => p.alive);
     if (alive.length === 0) { room.gameOver = true; fx(room, "gameover"); broadcast(room); continue; }
 
-    // Heart pickups heal anyone who isn't full.
     room.pickups = room.pickups.filter(pk => {
-      const taker = alive.find(p => p.hp < MAX_HP && Math.hypot(p.x - pk.x, p.y - pk.y) < 40);
+      const taker = alive.find(p => p.hp < cap(p) && Math.hypot(p.x - pk.x, p.y - pk.y) < 40);
       if (!taker) return true;
-      taker.hp++;
+      taker.hp++; taker.stats.hearts++;
       fx(room, "heal", { x: pk.x, y: pk.y });
       return false;
     });
 
-    // The dungeon key.
     if (room.keyDrop && alive.some(p => Math.hypot(p.x - room.keyDrop.x, p.y - room.keyDrop.y) < 38)) {
       fx(room, "key", room.keyDrop);
       room.key = true; room.keyDrop = null;
       notice(room, "Dungeon key collected! Now clear the room and head for the exit.");
     }
 
-    // Door and room progression.
     const cleared = room.enemies.every(e => !e.alive);
     const doorOpen = cleared && (room.stage === 0 || room.key);
     if (doorOpen && !room.doorWas) {
@@ -378,16 +567,13 @@ function tick() {
     if (doorOpen) {
       const nearExit = alive.every(p => p.x > 700 && Math.abs(p.y - 260) < 90);
       if (nearExit) {
-        if (room.stage < 2) {
-          room.stage++; room.lockedNoticed = false;
-          initStage(room);
-          fx(room, "stage", { stage: room.stage });
-          notice(room, `Room ${room.stage + 1}: ${roomLayouts[room.stage].name}`);
-        } else {
-          room.finished = true;
-          fx(room, "win");
-          notice(room, "The team escaped the dungeon!");
-        }
+        if (room.stage < LAST_STAGE) {
+          // Open the shop. Fallen heroes get back up with 2 hearts.
+          all.forEach(p => { if (!p.alive) { p.alive = true; p.hp = 2; p.reviveT = 0; } p.input = { up: false, down: false, left: false, right: false }; });
+          room.shop = { ready: new Set(), until: now + SHOP_TIME };
+          fx(room, "shopopen");
+          notice(room, "Rest stop! Spend your gold, then press READY.");
+        } else finishRun(room);
       }
     }
     broadcast(room);
@@ -398,5 +584,5 @@ setInterval(tick, 50);
 if (require.main === module) {
   server.listen(PORT, () => console.log(`Dungeon Duo listening on ${PORT}`));
 } else {
-  module.exports = { server, io, rooms, MOB, MAX_HP };   // for automated tests
+  module.exports = { server, io, rooms, MOB, MAX_HP, roomLayouts, initStage, startRun };   // for automated tests
 }
