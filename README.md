@@ -1,4 +1,4 @@
-# Dungeon Duo — Version 1
+# Riff & Shield (formerly Dungeon Duo)
 
 A browser-based, two-player co-op dungeon crawler built with Phaser-style canvas rendering, Node.js, Express, and Socket.IO. (The game renderer is deliberately lightweight vanilla Canvas so the project has no build step.)
 

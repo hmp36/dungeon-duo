@@ -641,7 +641,7 @@ function tick() {
 setInterval(tick, 50);
 
 if (require.main === module) {
-  server.listen(PORT, () => console.log(`Dungeon Duo listening on ${PORT}`));
+  server.listen(PORT, () => console.log(`Riff & Shield listening on ${PORT}`));
 } else {
   module.exports = { server, io, rooms, MOB, MAX_HP, roomLayouts, initStage, startRun, ITEMS, giveItem };   // for automated tests
 }
