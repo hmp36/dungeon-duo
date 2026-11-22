@@ -14,7 +14,7 @@ Hosted on Render's free tier, so the first visit after a quiet period can take u
 2. Player 1 enters a hero name and selects **Create a Room**.
 3. Share the six-character room code with Player 2.
 4. Player 2 enters the same code and selects **Join Room**.
-5. Move with **WASD** or the **arrow keys**. **Space** smashes your guitar over enemies' heads (2 damage, big arc). **Q** plays a riff: music notes stun every monster in front of you for about 2 seconds (4 second cooldown). **Shift** dashes: a quick burst with brief invulnerability.
+5. Move with **WASD** or the **arrow keys**. **Space** smashes your guitar over enemies' heads (2 damage, big arc). **Q** plays a riff: music notes stun every monster in front of you for about 1 second (4 second cooldown). **Shift** dashes: a quick burst with brief invulnerability.
 6. Red rings and a "!" mean a monster is winding up a hit. Step back or dash out.
 7. Defeat all monsters to open the route forward. Monsters sleep until a teammate joins; use **Play solo** to test alone.
 8. In **Room 2 (The Crypt)** the glowing **Keeper** skeleton carries the dungeon key. Defeat him, then grab the key from the floor.

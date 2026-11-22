@@ -16,7 +16,7 @@ const ROOM_W = 800, ROOM_H = 520;
 const MAX_HP = 5;
 const REVIVE_TIME = 2.2;       // seconds a teammate must stand next to a fallen hero
 const HIT_INVULN = 1100;       // ms of protection after taking a hit
-const NOTE_COOLDOWN = 4000, NOTE_STUN = 1800;
+const NOTE_COOLDOWN = 4000, NOTE_STUN = 1100;
 const DASH_MS = 170, DASH_COOLDOWN = 1100;
 
 // Monster types. windup = warning time before a hit lands, cooldown = pause between attacks.
