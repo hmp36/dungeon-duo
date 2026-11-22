@@ -205,7 +205,7 @@ function renderGear() {
   const st = me.st || {}, bits = [];
   if (st.dmg) bits.push("+" + st.dmg + " dmg"); if (st.crit) bits.push(st.crit + "% crit"); if (st.reach) bits.push("+" + st.reach + " reach"); if (st.hp) bits.push("+" + st.hp + " heart"); if (st.speed) bits.push("+" + Math.round(st.speed * 100) + "% speed"); if (st.cd) bits.push("-" + Math.round(st.cd * 100) + "% cooldowns"); if (st.stun) bits.push("+" + st.stun + "ms stun");
   const slot = (key, label) => { const id = me.equip[key], it = ITEMS[id]; return `<button class="slot" data-un="${key}"><small>${label}</small>${it ? `<b style="color:${RCOL[it.rarity]}">${it.name}</b><small>${it.desc} • click to unequip</small>` : '<small>empty</small>'}</button>`; };
-  el.innerHTML = `<h3>GEAR <button class="x" data-close="1">CLOSE</button></h3>${slot("weapon", "WEAPON")}${slot("head", "HEAD")}${slot("trinket", "TRINKET")}
+  el.innerHTML = `<h3>GEAR <button class="x" data-close="1">CLOSE</button></h3><canvas id="gearPv" width="280" height="200" style="width:100%;height:auto;border-radius:8px;margin-bottom:6px"></canvas>${slot("weapon", "WEAPON")}${slot("head", "HEAD")}${slot("trinket", "TRINKET")}
     <div class="stats">${bits.length ? "Bonuses: " + bits.join(", ") : "No bonuses yet. Smash chests and mimics for gear."}</div><h4>BACKPACK</h4>` +
     (me.inv.length ? me.inv.map(id => { const it = ITEMS[id]; return `<button class="inv" data-eq="${id}"><b style="color:${RCOL[it.rarity]}">${it.name}</b> <small>${RNAME[it.rarity]} ${it.slot} • ${it.desc}</small></button>`; }).join("") : '<div class="empty">Empty. Items you find appear here; click to equip.</div>');
   el.classList.remove("hidden");
@@ -650,25 +650,65 @@ function atkPose(kind, age, dur) {
   if (u < 0.6) { const v = (u - 0.28) / 0.32; return { th: lerp(a[1], a[2], ease(v)), push: lerp(-2, 5, v), ext: 1.1, sq: 0.96 }; }
   return { th: lerp(a[2], 0.85, (u - 0.6) / 0.4), push: lerp(5, 0, (u - 0.6) / 0.4), ext: 1, sq: 1 };
 }
-function drawGuitar(len, glow) {
+const GLOOK = {
+  none: { body: "#c0562b", hi: "#e08a52", neck: "#6b4a2a" }, oak: { body: "#8a5a30", hi: "#b9854c", neck: "#4a3018" },
+  cleaver: { body: "#7a7f8a", hi: "#b4bac6", neck: "#4a3a2a", studs: true }, edge: { body: "#aeb8c8", hi: "#eef3fa", neck: "#6b4a2a", trim: "#e8c452" },
+  storm: { body: "#2a3c8a", hi: "#74b0ff", neck: "#2a2f4a", spark: true }, tooth: { body: "#a8281c", hi: "#ff7a3c", neck: "#3a1a14", spikes: true }
+};
+function drawGuitar(len, glow, wid, t = 0) {
+  const L = GLOOK[wid] || GLOOK.none;
   if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 10; }
-  ctx.fillStyle = "#6b4a2a"; ctx.fillRect(2, -1.8, len - 8, 3.6); ctx.fillStyle = "#c9a56a"; for (let i = 0; i < 4; i++) ctx.fillRect(7 + i * 5, -1.8, 1, 3.6);
+  ctx.fillStyle = L.neck; ctx.fillRect(2, -1.8, len - 8, 3.6); ctx.fillStyle = "#c9a56a"; for (let i = 0; i < 4; i++) ctx.fillRect(7 + i * 5, -1.8, 1, 3.6);
   ctx.fillStyle = "#2a1a10"; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(len - 8, -3.5, 9, 7, 2) : ctx.rect(len - 8, -3.5, 9, 7); ctx.fill();
-  blob(-6, 0, 9.5, 8, "#c0562b"); blob(-17, 0, 7, 6, "#c0562b"); blob(-6, -2, 6, 3.5, "#e08a52"); ball(-8, 0.5, 3.2, "#2a1a10"); ctx.fillStyle = "#e8dcc0"; ctx.fillRect(-14, -1, 12, 2);
+  if (L.spikes) { ctx.fillStyle = "#f3ead2"; for (const [sx, sy, sa] of [[-6, -9, -1.57], [-14, -7, -2.2], [-14, 7, 2.2], [-6, 9, 1.57], [-23, 0, 3.14]]) { ctx.save(); ctx.translate(sx, sy); ctx.rotate(sa); ctx.beginPath(); ctx.moveTo(-2.6, 0); ctx.lineTo(0, -7); ctx.lineTo(2.6, 0); ctx.fill(); ctx.restore(); } }
+  blob(-6, 0, 9.5, 8, L.body); blob(-17, 0, 7, 6, L.body); blob(-6, -2, 6, 3.5, L.hi); ball(-8, 0.5, 3.2, "#2a1a10"); ctx.fillStyle = "#e8dcc0"; ctx.fillRect(-14, -1, 12, 2);
+  if (L.trim) { ctx.strokeStyle = L.trim; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.ellipse(-6, 0, 9.5, 8, 0, 0, 6.283); ctx.stroke(); ctx.beginPath(); ctx.ellipse(-17, 0, 7, 6, 0, 0, 6.283); ctx.stroke(); }
+  if (L.studs) { ctx.fillStyle = "#dfe5ee"; for (const [sx, sy] of [[-3, -6], [-10, -5], [-3, 6], [-10, 5], [-18, -3], [-18, 3]]) ctx.fillRect(sx - 1, sy - 1, 2.2, 2.2); }
+  if (L.spark) { ctx.strokeStyle = "#d8ebff"; ctx.lineWidth = 1.2; const k = Math.floor(t / 90) % 3; ctx.beginPath(); ctx.moveTo(-4, -8); ctx.lineTo(-8 - k, -3); ctx.lineTo(-5, -1); ctx.lineTo(-10, 5 + k); ctx.stroke(); }
   ctx.shadowBlur = 0;
 }
-function drawSword(glow) {
+const SLOOK = {
+  none: { grip: "#6b4a2a", len: 46, hw: 3.6, c0: "#ffffff", c1: "#dfe6ee", c2: "#9aa5b8" }, oak: { grip: "#8a5a30", len: 46, hw: 3.6, c0: "#ffffff", c1: "#dfe6ee", c2: "#9aa5b8", wrap: true },
+  cleaver: { grip: "#4a3a2a", len: 38, hw: 6, c0: "#c9cdd4", c1: "#9aa0ac", c2: "#6b7280", chip: true }, edge: { grip: "#6b4a2a", len: 54, hw: 3.4, c0: "#ffffff", c1: "#e8f0fa", c2: "#b4c4dc" },
+  storm: { grip: "#2a2f4a", len: 50, hw: 3.8, c0: "#e8f4ff", c1: "#74b0ff", c2: "#2a5ad0", spark: true }, tooth: { grip: "#3a1a14", len: 50, hw: 4.4, c0: "#fff4dc", c1: "#f0d9a8", c2: "#c06a3a", serr: true }
+};
+function drawSword(glow, wid, t = 0) {
+  const L = SLOOK[wid] || SLOOK.none;
   if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 10; }
-  ctx.fillStyle = "#6b4a2a"; ctx.fillRect(-5, -1.8, 9, 3.6); ball(-6, 0, 2.6, "#e8c452");
+  ctx.fillStyle = L.grip; ctx.fillRect(-5, -1.8, 9, 3.6); ball(-6, 0, 2.6, "#e8c452");
+  if (L.wrap) { ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 1; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(-3 + i * 3, -1.8); ctx.lineTo(-2 + i * 3, 1.8); ctx.stroke(); } }
   ctx.fillStyle = "#e8c452"; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(3, -7, 3.6, 14, 1.5) : ctx.rect(3, -7, 3.6, 14); ctx.fill();
-  const g = ctx.createLinearGradient(0, -4, 0, 4); g.addColorStop(0, "#ffffff"); g.addColorStop(0.5, "#dfe6ee"); g.addColorStop(1, "#9aa5b8"); ctx.fillStyle = g;
-  ctx.beginPath(); ctx.moveTo(6, -3.6); ctx.lineTo(38, -2.4); ctx.lineTo(46, 0); ctx.lineTo(38, 2.4); ctx.lineTo(6, 3.6); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = "rgba(0,0,0,.18)"; ctx.fillRect(6, 0, 34, 0.8); ctx.shadowBlur = 0;
+  const g = ctx.createLinearGradient(0, -L.hw, 0, L.hw); g.addColorStop(0, L.c0); g.addColorStop(0.5, L.c1); g.addColorStop(1, L.c2); ctx.fillStyle = g;
+  ctx.beginPath();
+  if (L.chip) { ctx.moveTo(6, -L.hw); ctx.lineTo(L.len - 8, -L.hw); ctx.lineTo(L.len - 5, -L.hw + 2); ctx.lineTo(L.len - 2, -1); ctx.lineTo(L.len, 1); ctx.lineTo(L.len - 3, L.hw); ctx.lineTo(6, L.hw); }
+  else if (L.serr) { ctx.moveTo(6, -L.hw); for (let i = 0; i < 5; i++) { ctx.lineTo(12 + i * 7, -L.hw - 1.4 + (i % 2) * 0.5); ctx.lineTo(14 + i * 7, -L.hw + 0.6); } ctx.quadraticCurveTo(L.len + 3, -2, L.len + 6, 1); ctx.quadraticCurveTo(L.len - 8, L.hw + 2, 6, L.hw); }
+  else { ctx.moveTo(6, -L.hw); ctx.lineTo(L.len - 8, -L.hw * 0.66); ctx.lineTo(L.len, 0); ctx.lineTo(L.len - 8, L.hw * 0.66); ctx.lineTo(6, L.hw); }
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "rgba(0,0,0,.18)"; ctx.fillRect(6, 0, L.len - 12, 0.8);
+  if (L.spark) { ctx.strokeStyle = "#f4fbff"; ctx.lineWidth = 1.3; const k = Math.floor(t / 80) % 4; ctx.beginPath(); ctx.moveTo(10, -1); ctx.lineTo(18 + k, 2); ctx.lineTo(25, -2); ctx.lineTo(33 - k, 2); ctx.lineTo(40, -1); ctx.stroke(); }
+  ctx.shadowBlur = 0;
 }
 function drawShield(big, glowing, pal) {
   const w = big ? 9 : 7, h = big ? 12 : 10;
   ctx.fillStyle = glowing ? "#7fe3ff" : pal.dark; ctx.beginPath(); ctx.moveTo(-w, -h); ctx.quadraticCurveTo(0, -h - 3, w, -h); ctx.lineTo(w, 2); ctx.quadraticCurveTo(w - 1, h - 2, 0, h + 3); ctx.quadraticCurveTo(-w + 1, h - 2, -w, 2); ctx.closePath(); ctx.fill();
   ctx.fillStyle = glowing ? "#e8fbff" : "#e8c452"; ctx.fillRect(-1, -h + 2, 2, h * 2 - 2); ctx.fillRect(-w + 2, -2, w * 2 - 4, 2); ball(0, 0, 2.4, glowing ? "#fff" : "#fff3b0");
+}
+function drawHead(id, hy, C, view, side, pal, t, moving, ph) {
+  const back = view === "back";
+  if (id === "cap") { ctx.fillStyle = C("#7a5430"); ctx.beginPath(); ctx.arc(0, hy - 1.5, 8.6, Math.PI * 1.02, Math.PI * 1.98); ctx.lineTo(8.6, hy - 3); ctx.quadraticCurveTo(0, hy - 5.5, -8.6, hy - 3); ctx.closePath(); ctx.fill(); ctx.strokeStyle = "rgba(40,22,10,.55)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, hy - 10); ctx.lineTo(0, hy - 4.6); ctx.stroke(); ctx.fillStyle = "#c9a56a"; ctx.fillRect(-8, hy - 4.4, 16, 1.4); if (!back) { ctx.fillStyle = C("#5a3d1f"); ctx.fillRect(side ? 3 : -3, hy - 5.5, side ? 7 : 6, 2.2); } return true; }
+  if (id === "plume") { ctx.fillStyle = C("#2f6a45"); ctx.beginPath(); ctx.ellipse(0, hy - 6, 14.5, 3.6, -0.05, 0, 6.283); ctx.fill(); ctx.beginPath(); ctx.moveTo(-8, hy - 6.5); ctx.quadraticCurveTo(-8, hy - 17, 0, hy - 17.5); ctx.quadraticCurveTo(8, hy - 17, 8, hy - 6.5); ctx.closePath(); ctx.fill(); ctx.fillStyle = "#e8c452"; ctx.fillRect(-8, hy - 9.6, 16, 2.4); const fw = moving ? Math.sin(ph) * 3 : Math.sin(t * 0.006) * 1.6; ctx.strokeStyle = "#f6f2e6"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(5, hy - 14); ctx.quadraticCurveTo(15, hy - 28 + fw, 23, hy - 17 + fw); ctx.stroke(); ctx.strokeStyle = "#d8cfae"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(5, hy - 14); ctx.quadraticCurveTo(15, hy - 28 + fw, 23, hy - 17 + fw); ctx.stroke(); return true; }
+  if (id === "crown") { ctx.fillStyle = C("#e9b93c"); ctx.beginPath(); ctx.moveTo(-8.5, hy - 5); ctx.lineTo(-9.5, hy - 14.5); ctx.lineTo(-4.5, hy - 9.5); ctx.lineTo(0, hy - 16.5); ctx.lineTo(4.5, hy - 9.5); ctx.lineTo(9.5, hy - 14.5); ctx.lineTo(8.5, hy - 5); ctx.closePath(); ctx.fill(); ctx.strokeStyle = "#8a6414"; ctx.lineWidth = 1; ctx.stroke(); ball(0, hy - 7.5, 1.8, "#6fa8ff"); ball(-5.5, hy - 7, 1.2, "#ff6a8a"); ball(5.5, hy - 7, 1.2, "#7be0a0"); ctx.strokeStyle = "rgba(120,190,255,.5)"; ctx.lineWidth = 1; for (let i = 1; i <= 2; i++) { ctx.beginPath(); ctx.arc(0, hy - 10, 11 + i * 4 + Math.sin(t * 0.01 + i) * 1.2, -2.2, -0.9); ctx.stroke(); } return true; }
+  if (id === "helm") { ctx.fillStyle = C("#8d98ab"); ctx.beginPath(); ctx.arc(0, hy - 1, 9.4, Math.PI, 0); ctx.lineTo(9, hy + 5); ctx.lineTo(-9, hy + 5); ctx.closePath(); ctx.fill(); ctx.fillStyle = "rgba(255,255,255,.4)"; ctx.beginPath(); ctx.ellipse(-3, hy - 6.5, 4, 2, -0.4, 0, 6.283); ctx.fill(); ctx.fillStyle = "#566073"; ctx.fillRect(-9.4, hy - 2.6, 18.8, 2); if (!back) { ctx.fillStyle = C("#6f7b90"); ctx.fillRect(side ? 5 : -1.4, hy - 2, 2.8, 8); ctx.fillStyle = "#1c2230"; ctx.fillRect(side ? 0.5 : -6.5, hy - 0.6, side ? 8 : 13, 2.6); } ball(-6, hy - 4, 0.9, "#cfd9e8"); ball(6, hy - 4, 0.9, "#cfd9e8"); return true; }
+  if (id === "beret") { ctx.fillStyle = C("#b8323c"); ctx.save(); ctx.translate(1.5, hy - 8); ctx.rotate(-0.22); ctx.beginPath(); ctx.ellipse(0, 0, 11, 5, 0, 0, 6.283); ctx.fill(); ctx.fillStyle = "rgba(255,255,255,.18)"; ctx.beginPath(); ctx.ellipse(-3, -1.6, 5, 1.8, 0, 0, 6.283); ctx.fill(); ctx.fillStyle = "#7a1f28"; ctx.fillRect(-0.8, -7, 1.8, 3); ctx.restore(); ctx.strokeStyle = "#f2c94c"; ctx.lineWidth = 2.4; ctx.lineCap = "round"; const fw = moving ? Math.sin(ph) * 2 : Math.sin(t * 0.006) * 1; ctx.beginPath(); ctx.moveTo(-6, hy - 9); ctx.quadraticCurveTo(-12, hy - 16 + fw, -15, hy - 9 + fw); ctx.stroke(); return true; }
+  return false;
+}
+function drawTrinket(id, side, moving, ph, t) {
+  const cx = side ? 3 : 0;
+  if (id === "coin") { ctx.strokeStyle = "#caa84a"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - 5, -13); ctx.quadraticCurveTo(cx, -2, cx + 5, -13); ctx.stroke(); ball(cx, -4.5, 3.2, "#f2c94c"); ball(cx, -4.5, 1.6, "#d9a62e"); ball(cx - 0.8, -5.3, 0.8, "#fff3b0"); }
+  else if (id === "charm") { ctx.strokeStyle = "#a8743a"; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-5, 4); ctx.lineTo(-5.5, 8.5); ctx.stroke(); ctx.fillStyle = "#7be0a0"; ctx.beginPath(); ctx.ellipse(-5.5, 11, 2.4, 4, 0.2, 0, 6.283); ctx.fill(); ctx.strokeStyle = "#2f8a5a"; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(-5.5, 7.6); ctx.lineTo(-5.5, 14.2); ctx.stroke(); }
+  else if (id === "metro") { const sw = Math.sin(t * 0.012) * 0.45; ctx.fillStyle = "#6b4a2a"; ctx.beginPath(); ctx.moveTo(4, 5); ctx.lineTo(10, 5); ctx.lineTo(9, 12.5); ctx.lineTo(5, 12.5); ctx.closePath(); ctx.fill(); ctx.strokeStyle = "#e8c452"; ctx.lineWidth = 1; ctx.save(); ctx.translate(7, 12); ctx.rotate(sw); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -8); ctx.stroke(); ball(0, -5.5, 1.1, "#e8c452"); ctx.restore(); }
+  else if (id === "locket") { ctx.strokeStyle = "#caa84a"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - 5, -13); ctx.quadraticCurveTo(cx, -3, cx + 5, -13); ctx.stroke(); heartShape(cx, -5.4, 3.4, "#e8405a"); ctx.strokeStyle = "#f2c94c"; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.arc(cx, -5.4, 4.4, 0, 6.283); ctx.stroke(); }
+  else if (id === "clover") { const cx2 = cx - 4, cy = -11; ctx.fillStyle = "#43b06a"; for (const [ox, oy] of [[-1.5, 0], [1.5, 0], [0, -1.5], [0, 1.5]]) { ctx.beginPath(); ctx.arc(cx2 + ox, cy + oy, 1.5, 0, 6.283); ctx.fill(); } ctx.fillStyle = "#2f8a4a"; ctx.fillRect(cx2 - 0.4, cy + 1.5, 0.9, 3); }
 }
 let guardFx = false;
 function drawHero(p, r, t) {
@@ -717,16 +757,19 @@ function drawHero(p, r, t) {
   ctx.fillStyle = "rgba(255,255,255,.14)"; ctx.beginPath(); ctx.ellipse(-1, -8, 4, 6, 0, 0, 6.283); ctx.fill();
   ctx.fillStyle = C("#5a3d1f"); ctx.fillRect(-7, 3, 14, 3.4); ctx.fillStyle = "#e8c452"; ctx.fillRect(-2, 2.6, 4, 4.2);
   if (knight) { ctx.fillStyle = "rgba(210,220,235,.9)"; ctx.beginPath(); ctx.ellipse(0, -11, 8.5, 3.2, 0, 0, 6.283); ctx.fill(); }   // pauldron collar
+  if (p.equip && p.equip.trinket && view !== "back") drawTrinket(p.equip.trinket, side, moving, ph, t);
   // head
   const hy = -22.5 + (moving ? Math.sin(ph * 2) * 0.5 : 0);
   ball(0, hy, 7.6, skin);
   if (view === "side") { ball(-6.5, hy + 0.5, 2.4, C(pal.hair)); ball(5.6, hy + 2, 1.6, skin); ball(3.4, hy - 0.8, 1.5, "#fff"); ball(3.9, hy - 0.8, 0.9, "#29202a"); ctx.fillStyle = "#c98b6b"; ctx.fillRect(2, hy + 3.8, 3, 0.9); }
   else if (view === "front") { ball(-3, hy - 0.5, 1.5, "#fff"); ball(3, hy - 0.5, 1.5, "#fff"); ball(-3, hy - 0.3, 0.9, "#29202a"); ball(3, hy - 0.3, 0.9, "#29202a"); ctx.fillStyle = "#c98b6b"; ctx.fillRect(-1.5, hy + 3.8, 3, 0.9); }
   else { ball(0, hy, 7.6, C(pal.hair)); }
-  if (view !== "back" && !knight) { ctx.fillStyle = C(pal.hair); ctx.beginPath(); ctx.arc(0, hy - 1, 8, Math.PI * 1.05, Math.PI * 1.95); ctx.fill(); }
+  const hid = p.equip && p.equip.head;
+  if (view !== "back" && (!knight || (hid && hid !== "helm"))) { ctx.fillStyle = C(pal.hair); ctx.beginPath(); ctx.arc(0, hy - 1, 8, Math.PI * 1.05, Math.PI * 1.95); ctx.fill(); }
   // head gear
   const hq = p.equip && p.equip.head ? RAR[Math.min(2, itemRarity(p.equip.head))] : null;
-  if (knight) {
+  if (hid && drawHead(hid, hy, C, view, side, pal, t, moving, ph)) { if (hq) ball(0, hy - 14, 1.6, hq); }
+  else if (knight) {
     ctx.fillStyle = C("#aeb8c8"); ctx.beginPath(); ctx.arc(0, hy - 1, 9.2, Math.PI, 0); ctx.lineTo(8.4, hy + 4); ctx.lineTo(-8.4, hy + 4); ctx.closePath(); ctx.fill();
     ctx.fillStyle = "rgba(255,255,255,.35)"; ctx.beginPath(); ctx.ellipse(-3, hy - 6, 4, 2, -0.4, 0, 6.283); ctx.fill();
     if (view !== "back") { ctx.fillStyle = "#1c2230"; ctx.fillRect(side ? 0 : -6, hy - 1, side ? 8 : 12, 3.4); }
@@ -741,21 +784,23 @@ function drawHero(p, r, t) {
     ctx.strokeStyle = "#ffd0a8"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(5, hy - 12); ctx.quadraticCurveTo(14, hy - 24 + fw, 22, hy - 14 + fw); ctx.stroke();
   }
   // weapon arm + weapon (world-space angle so it also works facing up/down)
-  const wq = p.equip && p.equip.weapon ? RAR[Math.min(2, itemRarity(p.equip.weapon))] : null, glow = wq && itemRarity(p.equip.weapon) > 0 ? wq : null;
+  const wid = p.equip && p.equip.weapon, wq = p.equip && p.equip.weapon ? RAR[Math.min(2, itemRarity(p.equip.weapon))] : null, glow = wq && itemRarity(p.equip.weapon) > 0 ? wq : null;
   let th, extend = 1, sx = nearSx, sy = shoulderY;
   if (pose) { th = pose.th; extend = pose.ext; }
   else if (p.playing && !knight) th = -0.32 + Math.sin(t * 0.045) * 0.06;
+  else if (!knight) th = -1.15 + (moving ? Math.sin(ph) * 0.1 : Math.sin(t * 0.004) * 0.04);      // guitar held by the neck, body up like a club on the shoulder
   else th = 0.95 + (moving ? Math.sin(ph) * 0.12 : Math.sin(t * 0.004) * 0.04);
   const base = side ? 0 : ANG[f], wang = side ? th : base + th * 1.0;      // side view is already mirrored by scale(sgn)
   let hx = sx + Math.cos(wang) * 11 * extend, hy2 = sy + Math.sin(wang) * 11 * extend;
   if (p.playing && !knight) { hx = sx + (side ? 7 : 3); hy2 = -5; }
-  const drawW = () => { ctx.save(); ctx.translate(hx, hy2); ctx.rotate(wang); if (p.playing && !knight) ctx.scale(1, 1); if (pose && !knight) { ctx.scale(-1.3, 1.3); } knight ? drawSword(glow) : drawGuitar(34, glow); ctx.restore(); };
+  const drawW = () => { ctx.save(); ctx.translate(hx, hy2); ctx.rotate(wang); if (knight) drawSword(glow, wid, t); else if (p.playing) drawGuitar(34, glow, wid, t); else { ctx.scale(-1.12, 1.12); ctx.translate(-22, 0); drawGuitar(34, glow, wid, t); } ctx.restore(); };
   if (view === "back") drawW();
   if (knight && !(view === "back")) {                 // shield on the off arm
     const bashing = p.playing, sx2 = side ? 5 + (bashing ? 8 : 0) : -9, sy2 = -3;
     arm(farSx, shoulderY, sx2, sy2, 4.6, C(pal.dark), skin); ctx.save(); ctx.translate(sx2 + (side ? 2 : 0), sy2); if (p.guard) ctx.scale(1.15, 1.15); drawShield(p.guard || bashing, p.guard, pal); ctx.restore(); guardFx = p.guard;
   }
   arm(sx, sy, hx, hy2, 4.8, C(pal.dark), skin);
+  if (p.equip && p.equip.trinket === "ember") { ctx.save(); ctx.shadowColor = "#ff8a3c"; ctx.shadowBlur = 8; ctx.strokeStyle = "#ff9a4a"; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.arc(hx, hy2, 3.4 + Math.sin(t * 0.012) * 0.4, 0, 6.283); ctx.stroke(); ctx.restore(); }
   if (view !== "back") drawW();
   ctx.restore();
   endSprite(1, 1, 42);
@@ -1079,9 +1124,8 @@ function drawPickups(t) {
 let lastTs = 0, avgDt = 16, lowFx = false;
 let hsUntil = 0, hsLoss = 0, hsLast = 0;                      // hit-stop: virtual time stands still for a few frames on heavy hits
 const vnow = () => performance.now() - hsLoss, hitStop = ms => { hsUntil = Math.max(hsUntil, performance.now() + ms); };
-function draw(ts) {
-  const pvFired = {};
-function drawPreview(cv, cls, t) {
+const pvFired = {};
+function drawPreview(cv, cls, t, equip) {
   const g = cv.getContext("2d"), pw = cv.width, ph = cv.height, knight = cls === "knight", saved = mctx;
   mctx = g; ctx = g; g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = "source-over"; g.globalAlpha = 1; g.clearRect(0, 0, pw, ph);
   const bgG = g.createRadialGradient(pw / 2, ph * 0.55, 10, pw / 2, ph * 0.55, pw * 0.85); bgG.addColorStop(0, knight ? "#33476a" : "#4a3a5c"); bgG.addColorStop(1, "#0a0e17"); g.fillStyle = bgG; g.fillRect(0, 0, pw, ph);
@@ -1090,11 +1134,16 @@ function drawPreview(cv, cls, t) {
   const id = "pv-" + cls, cyc = t % 3400, plan = [[0, 0], [330, 1], [660, 4], [1060, 2]];
   plan.forEach(([at, k]) => { const key = id + k, hit = cyc >= at && cyc < at + 120; if (hit && !pvFired[key]) { pvFired[key] = 1; swing[id] = { t, k }; } if (!hit) pvFired[key] = 0; });
   const special = cyc > 2000 && cyc < 3100;
-  drawHero({ id, slot: knight ? 1 : 0, cls, facing: "right", alive: true, revive: 0, invuln: false, hurt: false, dashing: false, playing: special, guard: knight && special, equip: {}, name: "", noteCd: 0, specialCd: 0 }, { x: 0, y: 0, moving: false }, t);
+  drawHero({ id, slot: knight ? 1 : 0, cls, facing: "right", alive: true, revive: 0, invuln: false, hurt: false, dashing: false, playing: special, guard: knight && special, equip: equip || {}, name: "", noteCd: 0, specialCd: 0 }, { x: 0, y: 0, moving: false }, t);
   g.restore(); mctx = saved; ctx = saved; labels.length = 0;
 }
-function previewLoop(t) { if (lobby.offsetParent !== null) document.querySelectorAll(".pv").forEach(cv => drawPreview(cv, cv.dataset.cls, t)); requestAnimationFrame(previewLoop); }
+function previewLoop(t) {
+  if (lobby.offsetParent !== null) document.querySelectorAll(".pv").forEach(cv => drawPreview(cv, cv.dataset.cls, t));
+  const gp = $("gearPv"); if (gp && gearOpen && state) { const me = state.players.find(p => p.id === myId); if (me) drawPreview(gp, me.cls || "bard", t, me.equip); }
+  requestAnimationFrame(previewLoop);
+}
 requestAnimationFrame(previewLoop);
+function draw(ts) {
 requestAnimationFrame(draw);
   const real = ts || performance.now(); if (hsLast && real < hsUntil) hsLoss += real - hsLast; hsLast = real; try { render(real - hsLoss); } catch (err) { if (!draw.warned) { console.error(err); draw.warned = true; } }
 }

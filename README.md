@@ -55,7 +55,7 @@ The server serves the browser client and Socket.IO from the same origin, so no s
 This is a small V1 prototype, not a production-hardened game. It uses in-memory rooms and simple collision/AI. A player who disconnects leaves the current room; reconnect/rejoin recovery and persistent sessions are not included.
 
 ## Gear and combat
-- Chests, mimics and the boss drop gear (weapon, head, trinket; common, uncommon, rare). Press I (or GEAR) to equip.
+- Chests, mimics and the boss drop gear (weapon, head, trinket; common, uncommon, rare). Press I (or GEAR) to equip. Every item changes how your hero looks (hats, blades, trinkets), and the gear panel shows a live portrait that updates as you equip and unequip. The Troubadour holds the guitar by the neck and swings it by the body like a club.
 - Attacks chain into a 4-hit combo: slash, backslash, whirlwind spin (hits all around), then an overhead ground pound (Ground Pound for the Knight, Power Chord for the Troubadour) with a stunning shockwave. Attacking right after a dash is a lunge. Gear can add crits.
 
 ## Visuals
