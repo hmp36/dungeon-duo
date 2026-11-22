@@ -18,7 +18,7 @@
   <meta name="twitter:description" content="Two heroes, five rooms, one dragon. Plays in your browser.">
   <meta name="twitter:image" content="https://dungeon-duo-ykqa.onrender.com/img/og.jpg">
   <meta name="theme-color" content="#10131b">
-  <link rel="stylesheet" href="style.css?v=14">
+  <link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
   <div id="conn" class="conn hidden" role="status"></div>
@@ -60,7 +60,7 @@
         <div><small>TREASURE</small><strong id="goldLabel">🪙 0</strong></div>
         <div class="codebox"><small>ROOM CODE</small><strong id="codeLabel">------</strong><button id="copyBtn">COPY</button></div>
       </div>
-      <div class="stage-wrap"><canvas id="gameCanvas" width="800" height="520"></canvas><div id="shop" class="overlay hidden"></div><div id="gear" class="gearpanel hidden"></div><div id="overlay" class="overlay hidden"><h2 id="overlayTitle"></h2><p id="overlayText"></p><div id="resultBox"></div><button id="rematchBtn" class="primary">PLAY AGAIN</button><button id="againBtn" class="secondary">BACK TO LOBBY</button></div><div id="pauseOv" class="overlay hidden"><h2>PAUSED</h2><p id="pauseText"></p><button id="resumeBtn" class="primary">RESUME</button></div></div>
+      <div class="stage-wrap"><canvas id="gameCanvas" width="800" height="520"></canvas><div id="shop" class="overlay hidden"></div><div id="gear" class="gearpanel hidden"></div><div id="overlay" class="overlay hidden"><h2 id="overlayTitle"></h2><p id="overlayText"></p><div id="resultBox"></div><button id="retryBtn" class="primary hidden">RETRY ROOM</button><button id="rematchBtn" class="primary">PLAY AGAIN</button><button id="againBtn" class="secondary">BACK TO LOBBY</button></div><div id="pauseOv" class="overlay hidden"><h2>PAUSED</h2><p id="pauseText"></p><button id="resumeBtn" class="primary">RESUME</button></div></div>
       <div class="actions"><button id="soloBtn" class="secondary hidden">PLAY SOLO</button><button id="pauseBtn" class="secondary">PAUSE (P)</button><button id="gearBtn" class="secondary">GEAR (I)</button><button id="fsBtn" class="secondary">FULLSCREEN</button><button id="muteBtn" class="secondary">SOUND: ON</button></div>
       <div id="touchPad" class="touchpad">
         <div class="dpad">
@@ -76,6 +76,6 @@
     </section>
     <footer>Built for brave friends • Stay together, watch your hearts.</footer>
   </main>
-  <script src="/socket.io/socket.io.js"></script><script src="game.js?v=14"></script>
+  <script src="/socket.io/socket.io.js"></script><script src="game.js?v=15"></script>
 </body>
 </html>

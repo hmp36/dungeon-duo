@@ -90,7 +90,7 @@ function makeRoom(code, daily, diff) {
     started: false, doorWas: false, enemies: [], pickups: [], chests: [], shots: [], gold: 0,
     shop: null, daily: daily ? dailyKey() : null, rng: daily ? mulberry(seed) : null,
     runStart: 0, runEnd: 0, result: null, lockedNoticed: false,
-    diff: "normal", paused: false, pausedAt: 0, pausedBy: "", rematch: new Set()
+    diff: "normal", paused: false, pausedAt: 0, pausedBy: "", rematch: new Set(), retry: new Set(), retries: 0, cpGold: 0
   };
 }
 let eid = 0;
@@ -169,7 +169,7 @@ function publicState(room) {
   return {
     code: room.code, stage: room.stage, key: room.key, finished: room.finished, gameOver: room.gameOver,
     waiting: !room.started, daily: room.daily, diff: room.diff, paused: room.paused, pausedBy: room.pausedBy,
-    rematch: room.rematch.size, needRematch: Object.keys(room.players).length, lastStage: LAST_STAGE, roomName: roomLayouts[room.stage].name,
+    retry: room.retry.size, canRetry: room.gameOver && !room.finished && room.stage > 0, rematch: room.rematch.size, needRematch: Object.keys(room.players).length, lastStage: LAST_STAGE, roomName: roomLayouts[room.stage].name,
     keyDrop: room.keyDrop,
     players: Object.values(room.players).map(p => ({
       id: p.id, name: p.name, slot: p.slot, cls: p.cls, x: p.x, y: p.y, hp: p.hp, cap: cap(p), alive: p.alive,
@@ -206,12 +206,19 @@ function shiftTimers(room, d) {
 }
 function resetRoom(room) {
   room.stage = 0; room.gold = 0; room.key = false; room.keyDrop = null; room.finished = false; room.gameOver = false;
-  room.shop = null; room.result = null; room.runStart = Date.now(); room.runEnd = 0; room.paused = false; room.rematch.clear();
+  room.shop = null; room.result = null; room.runStart = Date.now(); room.runEnd = 0; room.paused = false; room.rematch.clear(); room.retry.clear(); room.retries = 0; room.cpGold = 0;
   if (room.daily) room.rng = mulberry(parseInt(room.daily.replace(/-/g, ""), 10));
   Object.values(room.players).forEach(p => {
     p.hp = DIFFS[room.diff].start; p.alive = true; p.reviveT = 0; p.lastHit = 0; p.up = {}; p.stats = newStats(); p.inv = []; p.equip = { weapon: null, head: null, trinket: null };
   });
   initStage(room);
+}
+
+// Retry from the start of the current room: hearts refilled, gold back to what it was on entry, gear kept. Retried runs are not ranked.
+function retryRoom(room) {
+  room.gameOver = false; room.key = false; room.keyDrop = null; room.shop = null; room.gold = room.cpGold; room.retries++; room.retry.clear(); room.rematch.clear();
+  Object.values(room.players).forEach(p => { p.hp = DIFFS[room.diff].start; p.alive = true; p.reviveT = 0; p.lastHit = 0; });
+  initStage(room); room.enemies.forEach(e => { e.activeAt = Date.now() + 1800; });
 }
 
 function finishRun(room) {
@@ -221,10 +228,9 @@ function finishRun(room) {
   const kills = ps.reduce((a, p) => a + p.stats.kills, 0), downs = ps.reduce((a, p) => a + p.stats.downs, 0);
   const score = Math.round(Math.max(0, 3000 + Math.max(0, 3000 - time * 4) + room.gold * 10 + kills * 25 - downs * 150) * DIFFS[room.diff].score);
   const names = ps.map(p => p.name).join(" & ");
-  board.push({ names, score, time, gold: room.gold, daily: room.daily, diff: room.diff, ts: Date.now() });
-  saveBoard();
+  if (!room.retries) { board.push({ names, score, time, gold: room.gold, daily: room.daily, diff: room.diff, ts: Date.now() }); saveBoard(); }
   room.result = {
-    time, score, gold: room.gold, kills, downs, daily: room.daily, diff: DIFFS[room.diff].label,
+    time, score, gold: room.gold, kills, downs, daily: room.daily, diff: DIFFS[room.diff].label, retries: room.retries,
     players: ps.map(p => ({ name: p.name, cls: p.cls, ...p.stats })),
     top: topBoard(!!room.daily)
   };
@@ -446,6 +452,14 @@ io.on("connection", socket => {
     broadcast(room);
   });
   // Rematch: when every hero in the room asks, restart the run with the same team and difficulty.
+  socket.on("retry", () => {
+    const room = rooms.get(socket.data.roomCode);
+    if (!room || !room.players[socket.id] || !room.gameOver || room.finished || room.stage < 1) return;
+    room.retry.add(socket.id);
+    if (Object.keys(room.players).every(id => room.retry.has(id))) { retryRoom(room); fx(room, "stage", { stage: room.stage }); notice(room, "Retrying this room. This run will no longer be ranked."); }
+    else notice(room, "Waiting for your teammate to press RETRY ROOM.");
+    broadcast(room);
+  });
   socket.on("rematch", () => {
     const room = rooms.get(socket.data.roomCode);
     if (!room || !room.players[socket.id] || !(room.finished || room.gameOver)) return;
@@ -541,7 +555,7 @@ function tick() {
     if (room.shop) {
       const everyone = all.every(p => room.shop.ready.has(p.id));
       if (everyone || now > room.shop.until) {
-        room.shop = null; room.stage++; initStage(room);
+        room.shop = null; room.stage++; initStage(room); room.cpGold = room.gold;
         fx(room, "stage", { stage: room.stage });
         notice(room, `Room ${room.stage + 1}: ${roomLayouts[room.stage].name}` + (roomLayouts[room.stage].elite !== undefined ? ". The Iron Warden guards this room!" : ""));
         room.enemies.forEach(e => { e.activeAt = Date.now() + 1800; });
@@ -710,5 +724,5 @@ setInterval(tick, 50);
 if (require.main === module) {
   server.listen(PORT, () => console.log(`Riff & Shield listening on ${PORT}`));
 } else {
-  module.exports = { server, io, rooms, MOB, MAX_HP, roomLayouts, initStage, startRun, ITEMS, giveItem, killEnemy, resetRoom, DIFFS };   // for automated tests
+  module.exports = { retryRoom, server, io, rooms, MOB, MAX_HP, roomLayouts, initStage, startRun, ITEMS, giveItem, killEnemy, resetRoom, DIFFS };   // for automated tests
 }

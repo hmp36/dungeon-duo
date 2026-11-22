@@ -106,6 +106,8 @@ $("copyBtn").onclick = () => navigator.clipboard?.writeText(roomCode).then(() =>
 $("againBtn").onclick = () => location.reload();
 let iVoted = false;
 $("rematchBtn").onclick = () => { iVoted = true; $("rematchBtn").disabled = true; socket.emit("rematch"); };
+let iRetry = false;
+$("retryBtn").onclick = () => { iRetry = true; $("retryBtn").disabled = true; socket.emit("retry"); };
 const canPause = () => state && !state.waiting && !state.finished && !state.gameOver && !state.shop && !game.classList.contains("hidden");
 function togglePause() { if (canPause()) socket.emit("pause"); }
 $("pauseBtn").onclick = togglePause; $("resumeBtn").onclick = togglePause;
@@ -136,7 +138,7 @@ socket.on("state", s => {
   });
   if (s.stage !== lastStage) {
     lastStage = s.stage; rp.clear(); splats.length = 0;
-    banner = { text: `ROOM ${s.stage + 1}`, sub: roomNames[s.stage].toUpperCase(), start: performance.now(), until: performance.now() + 2600 };
+    banner = { text: `ROOM ${s.stage + 1}`, sub: roomNames[s.stage].toUpperCase(), start: vnow(), until: vnow() + 2600 };
   }
   state = s; updateHud(); checkOverlay(); updateShop(); renderGear(); setTrack(s.stage, s.waiting);
 });
@@ -161,7 +163,7 @@ function checkOverlay() {
   if (state.finished && state.result) {
     const r = state.result, mm = Math.floor(r.time / 60), ss = String(r.time % 60).padStart(2, "0");
     $("overlayTitle").textContent = "DUNGEON CLEARED!"; $("overlayText").textContent = r.daily ? "Daily Dungeon " + r.daily : "The team made it out. Excellent teamwork!";
-    rb.innerHTML = `<div class="result"><div class="big">${r.score} PTS</div><div>${r.diff && r.diff !== "Normal" ? r.diff + " • " : ""}Time ${mm}:${ss} • Gold ${r.gold} • Kills ${r.kills} • Falls ${r.downs}</div>
+    rb.innerHTML = `<div class="result"><div class="big">${r.score} PTS</div><div>${r.diff && r.diff !== "Normal" ? r.diff + " • " : ""}Time ${mm}:${ss} • Gold ${r.gold} • Kills ${r.kills} • Falls ${r.downs}</div>${r.retries ? `<div class="eyebrow">RETRIED ${r.retries}x: NOT RANKED</div>` : ""}
       <table><tr><th>HERO</th><th>KILLS</th><th>CHESTS</th><th>REVIVES</th><th>HEARTS</th></tr>${r.players.map(p => `<tr><td>${p.cls === "knight" ? "🛡" : "🎸"} ${p.name}</td><td>${p.kills}</td><td>${p.chests}</td><td>${p.revives}</td><td>${p.hearts}</td></tr>`).join("")}</table>
       <div class="eyebrow">${r.daily ? "TODAY'S DAILY LEADERBOARD" : "TOP RUNS"}</div><ol>${r.top.map(b => `<li>${b.names} — ${b.score} pts (${b.time}s)</li>`).join("")}</ol></div>`;
     $("overlay").classList.remove("hidden");
@@ -174,6 +176,9 @@ function checkOverlay() {
     rb2.disabled = iVoted;
     rb2.textContent = iVoted && state.needRematch > 1 ? `WAITING FOR TEAMMATE (${state.rematch}/${state.needRematch})` : state.rematch > 0 && state.needRematch > 1 ? `PLAY AGAIN (${state.rematch}/${state.needRematch} ready)` : "PLAY AGAIN";
   } else { iVoted = false; rb2.disabled = false; }
+  const tb = $("retryBtn"); tb.classList.toggle("hidden", !(state.gameOver && state.canRetry)); rb2.className = tb.classList.contains("hidden") ? "primary" : "secondary";
+  if (!state.gameOver) { iRetry = false; tb.disabled = false; }
+  else { tb.disabled = iRetry; tb.textContent = iRetry && state.needRematch > 1 ? `WAITING FOR TEAMMATE (${state.retry}/${state.needRematch})` : state.retry > 0 && state.needRematch > 1 ? `RETRY ROOM (${state.retry}/${state.needRematch} ready)` : "RETRY ROOM"; }
   const pv = $("pauseOv");
   if (state.paused && !ended) { $("pauseText").textContent = `${state.pausedBy || "A hero"} paused the game. Press P or RESUME to continue.`; pv.classList.remove("hidden"); } else pv.classList.add("hidden");
   $("pauseBtn").textContent = state.paused ? "RESUME (P)" : "PAUSE (P)";
@@ -401,12 +406,12 @@ function burst(x, y, col, n, sp, life, size, grav = 0) {
 function floater(x, y, text, col) { floats.push({ x, y, text, col, life: 900, max: 900 }); }
 const KIND_COL = { slime: "#5cc86b", skeleton: "#e8e4d4", bat: "#8e5bc4", brute: "#c0503b" };
 function handleFx(f) {
-  const now = performance.now();
+  const now = vnow();
   switch (f.type) {
     case "swing": swing[f.id] = { t: now, k: f.kind || 0 }; sfx.swing(); if (f.kind === 4) setTimeout(() => sfx.swing(), 110); break;
     case "pound": { const kn = f.cls === "knight"; rings.push({ x: f.x, y: f.y + 6, r: 12, max: 112, col: kn ? "200,230,255" : "255,190,90", life: 480, t0: 480 }); rings.push({ x: f.x, y: f.y + 6, r: 6, max: 70, col: "255,255,255", life: 320, t0: 320 }); burst(f.x, f.y + 8, "#c9a27c", 22, 230, 560, 6, 200); burst(f.x, f.y, kn ? "#dfe9ff" : "#ffd27a", 14, 260, 420, 4); if (!kn) for (let i = 0; i < 6; i++) noteGlyphs.push({ x: f.x + rnd(-30, 30), y: f.y - 8, vx: rnd(-90, 90), vy: rnd(-170, -70), life: 800, max: 800, g: ["♪", "♫", "♩"][i % 3], col: "#ffe08a" }); floater(f.x, f.y - 34, kn ? "GROUND POUND!" : "POWER CHORD!", "#ffd34d"); shake = Math.max(shake, 14); sfx.slam(); break; }
-    case "hit": if (f.crit) floater(f.x, f.y - 30, "CRIT!", "#ffd34d"); if (f.big) { shake = Math.max(shake, 9); burst(f.x, f.y, "#ffb070", 12, 220, 450, 5); } burst(f.x, f.y, "#fff3b0", 8, 150, 380, 4); burst(f.x, f.y, "#ffb347", 5, 110, 320, 3); shake = Math.max(shake, 3); sfx.hit(); break;
-    case "kill": splats.push({ x: f.x, y: f.y + 8, col: KIND_COL[f.kind] || "#fff", kind: f.kind, r: rnd(0, 6.28) }); if (splats.length > 40) splats.shift(); burst(f.x, f.y, KIND_COL[f.kind] || "#fff", 22, 190, 650, 5, 220); burst(f.x, f.y, "#cfd3dc", 8, 90, 700, 7); shake = Math.max(shake, 7); sfx.kill(); break;
+    case "hit": if (f.big) hitStop(75); else if (f.crit) hitStop(55); if (f.crit) floater(f.x, f.y - 30, "CRIT!", "#ffd34d"); if (f.big) { shake = Math.max(shake, 9); burst(f.x, f.y, "#ffb070", 12, 220, 450, 5); } burst(f.x, f.y, "#fff3b0", 8, 150, 380, 4); burst(f.x, f.y, "#ffb347", 5, 110, 320, 3); shake = Math.max(shake, 3); sfx.hit(); break;
+    case "kill": if (f.kind === "brute" || f.kind === "boss") hitStop(110); splats.push({ x: f.x, y: f.y + 8, col: KIND_COL[f.kind] || "#fff", kind: f.kind, r: rnd(0, 6.28) }); if (splats.length > 40) splats.shift(); burst(f.x, f.y, KIND_COL[f.kind] || "#fff", 22, 190, 650, 5, 220); burst(f.x, f.y, "#cfd3dc", 8, 90, 700, 7); shake = Math.max(shake, 7); sfx.kill(); break;
     case "hurt": burst(f.x, f.y, "#ff5a5a", 14, 170, 520, 4); shake = Math.max(shake, 11); floater(f.x, f.y - 30, "-" + f.dmg, "#ff6b6b"); if (f.id === myId) hurtFlash = 0.55; sfx.hurt(); break;
     case "heal": burst(f.x, f.y, "#ff8fb3", 10, 80, 700, 4, -80); floater(f.x, f.y - 20, "+1 HEART", "#ff9dbb"); sfx.heal(); break;
     case "keydrop": burst(f.x, f.y, "#ffd86b", 24, 160, 800, 4, -30); floater(f.x, f.y - 30, "THE KEY!", "#ffe08a"); shake = Math.max(shake, 5); sfx.keydrop(); break;
@@ -421,7 +426,7 @@ function handleFx(f) {
     case "guard": sfx.guard(); rings.push({ x: f.x, y: f.y, r: 10, max: 60, col: "127,227,255", life: 400, t0: 400 }); break;
     case "blocked": floater(f.x, f.y - 34, "BLOCKED", "#9cecff"); burst(f.x, f.y - 6, "#e8f4ff", 8, 170, 260, 3); sfx.hit(); break;
     case "mimic": burst(f.x, f.y, "#ffd86b", 22, 190, 700, 5, 150); floater(f.x, f.y - 34, "MIMIC!", "#ff8b8b"); shake = Math.max(shake, 9); sfx.hurt(); break;
-    case "bossphase": shake = 20; banner = { text: f.phase === 3 ? "ENRAGED!" : "IT ROARS!", sub: "THE DRAGON OF DEBT", start: performance.now(), until: performance.now() + 1800 }; sfx.roar(); burst(f.x, f.y, "#ff8a3c", 30, 260, 800, 6, -40); break;
+    case "bossphase": shake = 20; banner = { text: f.phase === 3 ? "ENRAGED!" : "IT ROARS!", sub: "THE DRAGON OF DEBT", start: vnow(), until: vnow() + 1800 }; sfx.roar(); burst(f.x, f.y, "#ff8a3c", 30, 260, 800, 6, -40); break;
     case "bossfire": burst(f.x, f.y, "#ffb347", 26, 240, 500, 5); sfx.fire(); shake = Math.max(shake, 6); break;
     case "slam": rings.push({ x: f.x, y: f.y + 20, r: 20, max: 120, col: "255,120,60", life: 420, t0: 420 }); burst(f.x, f.y + 30, "#c9a27c", 20, 220, 500, 6, 160); shake = Math.max(shake, 16); sfx.slam(); break;
     case "bigshake": shake = 18; break;
@@ -1018,6 +1023,8 @@ function drawPickups(t) {
 
 /* ------------------------------------------------------------------ main loop */
 let lastTs = 0, avgDt = 16, lowFx = false;
+let hsUntil = 0, hsLoss = 0, hsLast = 0;                      // hit-stop: virtual time stands still for a few frames on heavy hits
+const vnow = () => performance.now() - hsLoss, hitStop = ms => { hsUntil = Math.max(hsUntil, performance.now() + ms); };
 function draw(ts) {
   const pvFired = {};
 function drawPreview(cv, cls, t) {
@@ -1035,7 +1042,7 @@ function drawPreview(cv, cls, t) {
 function previewLoop(t) { if (lobby.offsetParent !== null) document.querySelectorAll(".pv").forEach(cv => drawPreview(cv, cv.dataset.cls, t)); requestAnimationFrame(previewLoop); }
 requestAnimationFrame(previewLoop);
 requestAnimationFrame(draw);
-  try { render(ts || performance.now()); } catch (err) { if (!draw.warned) { console.error(err); draw.warned = true; } }
+  const real = ts || performance.now(); if (hsLast && real < hsUntil) hsLoss += real - hsLast; hsLast = real; try { render(real - hsLoss); } catch (err) { if (!draw.warned) { console.error(err); draw.warned = true; } }
 }
 function render(t) {
   const dt = Math.min(50, t - (lastTs || t)); lastTs = t; frame++;

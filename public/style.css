@@ -35,3 +35,5 @@
 @keyframes spin{to{transform:rotate(360deg)}}
 button:disabled{opacity:.5;cursor:not-allowed;transform:none!important;filter:none!important}
 .overlay .primary+.secondary{margin-top:10px}
+
+#overlay button { margin-top: 8px; }

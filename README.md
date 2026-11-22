@@ -70,3 +70,5 @@ This is a small V1 prototype, not a production-hardened game. It uses in-memory 
 - **Share preview**: Open Graph and Twitter tags with `public/img/og.jpg` (1200x630).
 - The connection banner explains the free-tier cold start ("Waking the dungeon...") and Create/Join stay disabled until the socket connects.
 - **Shielded skeletons** carry a steel shield that turns plain slashes (1 damage). The whirlwind spin, the overhead pound or any stun breaks their guard, so the full combo matters.
+- **Retry Room**: after a wipe in room 2 or later, both heroes can retry the current room with full hearts and the gold they had on entry. Retried runs are not ranked on the leaderboard.
+- **Hit-stop**: crits, the ground pound and big kills freeze the action for a few frames.
