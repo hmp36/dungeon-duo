@@ -51,6 +51,20 @@ window.addEventListener("keyup",e=>{
  if(k==="d"||k==="arrowright")keys.right=false;
 });
 window.addEventListener("blur",()=>keys={});
+// Touch controls: on-screen d-pad and attack button (shown only on touch devices).
+document.querySelectorAll("#touchPad [data-key]").forEach(b=>{
+ const k=b.dataset.key;
+ b.addEventListener("pointerdown",e=>{e.preventDefault();keys[k]=true});
+ ["pointerup","pointercancel","pointerleave"].forEach(t=>b.addEventListener(t,e=>{e.preventDefault();keys[k]=false}));
+ b.addEventListener("contextmenu",e=>e.preventDefault());
+});
+(()=>{
+ const atk=$("atkBtn");let timer=null;
+ const stop=()=>{if(timer){clearInterval(timer);timer=null}};
+ atk.addEventListener("pointerdown",e=>{e.preventDefault();socket.emit("attack");stop();timer=setInterval(()=>socket.emit("attack"),450)});
+ ["pointerup","pointercancel","pointerleave"].forEach(t=>atk.addEventListener(t,stop));
+ atk.addEventListener("contextmenu",e=>e.preventDefault());
+})();
 setInterval(()=>{
  if(!myId||!state)return;
  const me=state.players.find(p=>p.id===myId);if(!me||!me.alive)return;
