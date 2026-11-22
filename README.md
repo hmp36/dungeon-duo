@@ -76,3 +76,6 @@ This is a small V1 prototype, not a production-hardened game. It uses in-memory 
 - **Volume**: separate music and effects sliders under the game (saved in the browser).
 - **Hexer**: a hooded caster who fires a fan of slow orbs. A hit slows that hero for a couple of seconds (SLOWED ring underfoot). Appears in the Archer Gallery and the Treasure Chamber.
 - **Team signals**: press 1-4 to call out HELP!, OVER HERE!, NICE! or WATCH OUT! above your hero.
+- **Gear**: six more items (Rusty Cleaver, Stormcaller, Iron Helm, Bard's Beret, Ember Ring, Four-Leaf Clover).
+- **Phones**: four signal buttons sit on the top-right of the game view; the controls row wraps on small screens.
+- **Stats**: `/api/stats` shows anonymous counts only (runs started, clears, retries, which room wiped a team, which monster landed the last hit). No names or room codes are stored.

@@ -114,6 +114,7 @@ $("againBtn").onclick = () => location.reload();
 let iVoted = false;
 $("rematchBtn").onclick = () => { iVoted = true; $("rematchBtn").disabled = true; socket.emit("rematch"); };
 let iRetry = false;
+document.querySelectorAll("#emoteBar button").forEach(b => b.addEventListener("pointerdown", e => { e.preventDefault(); socket.emit("emote", Number(b.dataset.e)); }));
 $("retryBtn").onclick = () => { iRetry = true; $("retryBtn").disabled = true; socket.emit("retry"); };
 const canPause = () => state && !state.waiting && !state.finished && !state.gameOver && !state.shop && !game.classList.contains("hidden");
 function togglePause() { if (canPause()) socket.emit("pause"); }
@@ -623,6 +624,9 @@ const blob = (x, y, rx, ry, c, rot = 0) => { ctx.fillStyle = c; ctx.beginPath();
 function leg(hx, hy, fx, fy, bend, w, c) { const mx = (hx + fx) / 2 + bend, my = (hy + fy) / 2; ctx.strokeStyle = c; ctx.lineWidth = w; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(mx, my); ctx.lineTo(fx, fy); ctx.stroke(); }
 function arm(sx, sy, hx, hy, w, c, skin) { const mx = (sx + hx) / 2 - (hy - sy) * 0.18, my = (sy + hy) / 2 + (hx - sx) * 0.18; ctx.strokeStyle = c; ctx.lineWidth = w; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(mx, my); ctx.lineTo(hx, hy); ctx.stroke(); ball(hx, hy, w * 0.55, skin); }
 const ITEMS = {
+  cleaver: { name: "Rusty Cleaver", slot: "weapon", rarity: 0, desc: "+1 damage, 5% crit" }, storm: { name: "Stormcaller", slot: "weapon", rarity: 2, desc: "+1 damage, +20 reach, 10% crit" },
+  helm: { name: "Iron Helm", slot: "head", rarity: 1, desc: "+2 hearts" }, beret: { name: "Bard's Beret", slot: "head", rarity: 1, desc: "+4% speed, -8% ability cooldown" },
+  ember: { name: "Ember Ring", slot: "trinket", rarity: 1, desc: "+1 damage, 5% crit" }, clover: { name: "Four-Leaf Clover", slot: "trinket", rarity: 2, desc: "20% crit, +5% speed" },
   oak: { name: "Oak Grip", slot: "weapon", rarity: 0, desc: "+1 damage" }, edge: { name: "Steel Edge", slot: "weapon", rarity: 1, desc: "+1 damage, +14 reach" },
   tooth: { name: "Dragon Tooth", slot: "weapon", rarity: 2, desc: "+2 damage, 15% crit" }, cap: { name: "Leather Cap", slot: "head", rarity: 0, desc: "+1 heart" },
   plume: { name: "Plumed Hat", slot: "head", rarity: 1, desc: "+6% speed, +1 heart" }, crown: { name: "Crown of Echoes", slot: "head", rarity: 2, desc: "-15% ability cooldown, longer stuns" },

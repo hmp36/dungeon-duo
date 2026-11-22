@@ -27,6 +27,15 @@ function topBoard(daily) {
 function dailyKey() { return new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" }); }
 app.get("/api/leaderboard", (req, res) => res.json({ daily: dailyKey(), top: topBoard(req.query.daily === "1") }));
 
+/* anonymous run stats: counts only (no names, no codes) so we can see which rooms and monsters wipe teams */
+const STATS_FILE = path.join(DATA_DIR, "stats.json");
+let stats = { runsStarted: 0, wipes: {}, killers: {}, clears: 0, retries: 0 };
+try { stats = Object.assign(stats, JSON.parse(fs.readFileSync(STATS_FILE, "utf8"))); } catch (e) { /* first run */ }
+let statsDirty = false;
+const bump = (obj, key) => { obj[key] = (obj[key] || 0) + 1; statsDirty = true; };
+setInterval(() => { if (!statsDirty) return; statsDirty = false; try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(STATS_FILE, JSON.stringify(stats)); } catch (e) { /* ephemeral disk is fine */ } }, 30000).unref();
+app.get("/api/stats", (req, res) => res.json(stats));
+
 /* ------------------------------------------------------------------ constants */
 const rooms = new Map();
 const ROOM_W = 800, ROOM_H = 520;
@@ -125,11 +134,17 @@ function initStage(room) {
   });
 }
 function startRun(room, grace) {
-  room.started = true; room.runStart = Date.now();
+  bump(stats, "runsStarted"); room.started = true; room.runStart = Date.now();
   room.enemies.forEach(e => { e.activeAt = Date.now() + grace; });
 }
 /* ---- equipment ---- */
 const ITEMS = {
+  cleaver: { name: "Rusty Cleaver",   slot: "weapon",  rarity: 0, st: { dmg: 1, crit: 5 } },
+  storm:   { name: "Stormcaller",     slot: "weapon",  rarity: 2, st: { dmg: 1, reach: 20, crit: 10 } },
+  helm:    { name: "Iron Helm",       slot: "head",    rarity: 1, st: { hp: 2 } },
+  beret:   { name: "Bard's Beret",    slot: "head",    rarity: 1, st: { speed: 0.04, cd: 0.08 } },
+  ember:   { name: "Ember Ring",      slot: "trinket", rarity: 1, st: { dmg: 1, crit: 5 } },
+  clover:  { name: "Four-Leaf Clover", slot: "trinket", rarity: 2, st: { crit: 20, speed: 0.05 } },
   oak:     { name: "Oak Grip",        slot: "weapon",  rarity: 0, st: { dmg: 1 } },
   edge:    { name: "Steel Edge",      slot: "weapon",  rarity: 1, st: { dmg: 1, reach: 14 } },
   tooth:   { name: "Dragon Tooth",    slot: "weapon",  rarity: 2, st: { dmg: 2, crit: 15 } },
@@ -218,13 +233,14 @@ function resetRoom(room) {
 
 // Retry from the start of the current room: hearts refilled, gold back to what it was on entry, gear kept. Retried runs are not ranked.
 function retryRoom(room) {
+  bump(stats, "retries");
   room.gameOver = false; room.key = false; room.keyDrop = null; room.shop = null; room.gold = room.cpGold; room.retries++; room.retry.clear(); room.rematch.clear();
   Object.values(room.players).forEach(p => { p.hp = DIFFS[room.diff].start; p.alive = true; p.reviveT = 0; p.lastHit = 0; });
   initStage(room); room.enemies.forEach(e => { e.activeAt = Date.now() + 1800; });
 }
 
 function finishRun(room) {
-  room.finished = true; room.runEnd = Date.now();
+  room.finished = true; room.runEnd = Date.now(); bump(stats, "clears");
   const time = Math.round((room.runEnd - room.runStart) / 1000);
   const ps = Object.values(room.players);
   const kills = ps.reduce((a, p) => a + p.stats.kills, 0), downs = ps.reduce((a, p) => a + p.stats.downs, 0);
@@ -536,7 +552,7 @@ function shake(room) { fx(room, "bigshake"); }
 
 function hurtPlayer(room, p, dmg, from, now) {
   if (now < (p.guardUntil || 0)) { fx(room, "blocked", { x: p.x, y: p.y }); return; }
-  p.hp = Math.max(0, p.hp - dmg); p.lastHit = now;
+  p.hp = Math.max(0, p.hp - dmg); p.lastHit = now; room.lastHitBy = from.elite ? "warden" : from.kind || "unknown";
   const dx = p.x - from.x, dy = p.y - from.y, d = Math.hypot(dx, dy) || 1;
   p.x = clampX(p.x + dx / d * 46); p.y = clampY(p.y + dy / d * 46);
   fx(room, "hurt", { id: p.id, x: p.x, y: p.y, dmg });
@@ -572,7 +588,7 @@ function tick() {
     }
 
     let alive = all.filter(p => p.alive);
-    if (alive.length === 0) { room.gameOver = true; fx(room, "gameover"); broadcast(room); continue; }
+    if (alive.length === 0) { room.gameOver = true; bump(stats.wipes, roomLayouts[room.stage].name); if (room.lastHitBy) bump(stats.killers, room.lastHitBy); fx(room, "gameover"); broadcast(room); continue; }
 
     for (const p of alive) {
       const dashing = now < p.dashUntil;
@@ -691,7 +707,7 @@ function tick() {
       }
     }
     alive = all.filter(p => p.alive);
-    if (alive.length === 0) { room.gameOver = true; fx(room, "gameover"); broadcast(room); continue; }
+    if (alive.length === 0) { room.gameOver = true; bump(stats.wipes, roomLayouts[room.stage].name); if (room.lastHitBy) bump(stats.killers, room.lastHitBy); fx(room, "gameover"); broadcast(room); continue; }
 
     room.pickups = room.pickups.filter(pk => {
       const taker = alive.find(p => p.hp < cap(p) && Math.hypot(p.x - pk.x, p.y - pk.y) < 40);
