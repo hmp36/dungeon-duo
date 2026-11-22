@@ -4,7 +4,9 @@ A browser-based, two-player co-op dungeon crawler built with Phaser-style canvas
 
 ## Live link
 
-**Not deployed yet.** After deploying this repository to Render, replace this line with the public URL, for example `https://your-dungeon-duo.onrender.com`.
+**Play it here: <https://dungeon-duo-ykqa.onrender.com>**
+
+Hosted on Render's free tier, so the first visit after a quiet period can take up to a minute to wake up.
 
 ## How to play
 
