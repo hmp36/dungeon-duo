@@ -810,12 +810,13 @@ function drawHero(p, r, t) {
   let th, extend = 1, sx = nearSx, sy = shoulderY;
   if (pose) { th = pose.th; extend = pose.ext; }
   else if (p.playing && !knight) th = -0.32 + Math.sin(t * 0.045) * 0.06;
-  else if (!knight) th = -1.15 + (moving ? Math.sin(ph) * 0.1 : Math.sin(t * 0.004) * 0.04);      // guitar held by the neck, body up like a club on the shoulder
+  else if (!knight) th = -0.42 + (moving ? Math.sin(ph) * 0.05 : Math.sin(t * 0.004) * 0.03);      // carried like a guitar until the swing starts
   else th = 0.95 + (moving ? Math.sin(ph) * 0.12 : Math.sin(t * 0.004) * 0.04);
   const base = side ? 0 : ANG[f], wang = side ? th : base + th * 1.0;      // side view is already mirrored by scale(sgn)
   let hx = sx + Math.cos(wang) * 11 * extend, hy2 = sy + Math.sin(wang) * 11 * extend;
-  if (p.playing && !knight) { hx = sx + (side ? 7 : 3); hy2 = -5; }
-  const drawW = () => { ctx.save(); ctx.translate(hx, hy2); ctx.rotate(wang); if (knight) drawSword(glow, wid, t); else if (p.playing) drawGuitar(34, glow, wid, t); else { ctx.scale(-1.12, 1.12); ctx.translate(-22, 0); drawGuitar(34, glow, wid, t); } ctx.restore(); };
+  const carryG = !knight && !pose;                      // out of a swing the Troubadour holds the guitar properly; only a strike turns it into a club
+  if (carryG) { hx = sx + (side ? 7 : 3); hy2 = -5 + (p.playing ? 0 : (moving ? Math.sin(ph * 2) * 0.8 : 0)); }
+  const drawW = () => { ctx.save(); ctx.translate(hx, hy2); ctx.rotate(wang); if (knight) drawSword(glow, wid, t); else if (carryG) drawGuitar(34, glow, wid, t); else { ctx.scale(-1.12, 1.12); ctx.translate(-22, 0); drawGuitar(34, glow, wid, t); } ctx.restore(); };
   if (view === "back") drawW();
   if (knight && !(view === "back")) {                 // shield on the off arm
     const bashing = p.playing, sx2 = side ? 5 + (bashing ? 8 : 0) : -9, sy2 = -3;
