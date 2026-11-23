@@ -90,3 +90,14 @@ This is a small V1 prototype, not a production-hardened game. It uses in-memory 
 - **Gear**: six more items (Rusty Cleaver, Stormcaller, Iron Helm, Bard's Beret, Ember Ring, Four-Leaf Clover).
 - **Phones**: four signal buttons sit on the top-right of the game view; the controls row wraps on small screens.
 - **Stats**: `/api/stats` shows anonymous counts only (runs started, clears, retries, which room wiped a team, which monster landed the last hit). No names or room codes are stored.
+
+## Hot Dog People and Frank's Fairground
+- Hot dog grunts squirt ketchup and mustard in a pair of shots, with spaghetti hair that wriggles.
+- Optional bonus region east of the Mire. Beat Big Frank (noodle ring, calls for backup) for 100 gold and a Crown of Echoes. The Keep does not require it.
+
+## Victory jingle
+- The Troubadour strums a few notes when a room is cleared, a region is cleared, and when the story ends.
+
+## Bigger village
+- Emberfall is now twice the size (1600x1040) with a camera that follows you. Villagers are spread out, so you walk to find them.
+- Roads wind and zigzag from the plaza to each gate.

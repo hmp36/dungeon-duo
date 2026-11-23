@@ -68,6 +68,7 @@ const MOB = {
   archer:   { hp: 2,  speed: 40, range: 0,   windup: 650, cooldown: 2300, dmg: 1, stop: 0,  gold: 6, ranged: true },
   hexer:    { hp: 3,  speed: 36, range: 0,   windup: 800, cooldown: 2800, dmg: 1, stop: 0,  gold: 8, ranged: true },     // casts a fan of slow orbs that bog heroes down
   bomber:   { hp: 2,  speed: 78, range: 62,  windup: 750, cooldown: 1000, dmg: 1, stop: 18, gold: 6 },     // runs in, lights its fuse, blows up (hurts monsters too)
+  hotdog:   { hp: 3,  speed: 58, range: 215, windup: 520, cooldown: 1900, dmg: 1, stop: 120, gold: 7 },     // Hot Dog Person: squirts ketchup and mustard from mid range
   mimic:    { hp: 4,  speed: 78, range: 46,  windup: 300, cooldown: 1100, dmg: 1, stop: 28, gold: 15 },
   warden:   { hp: 20, speed: 34, range: 80, windup: 700, cooldown: 1700, dmg: 2, stop: 58, gold: 40 },   // mini-boss (drawn as a big gold brute)
   boss:     { hp: 56, speed: 36, range: 108, windup: 900, cooldown: 2300, dmg: 2, stop: 80, gold: 100 }
@@ -77,29 +78,33 @@ const roomLayouts = [
   { name: "Forgotten Entrance", mobs: ["slime", "slime", "slime"], hearts: [[330, 450]], chests: [[700, 100], [120, 470]] },
   { name: "The Crypt", mobs: ["skeleton", "skeleton", "bat", "bat"], keeper: 0, shield: [1], hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]] },
   { name: "Archer Gallery", mobs: ["archer", "hexer", "skeleton", "bomber"], shield: [2], hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470], [710, 470]], mimics: 0.3 },
-  { name: "Treasure Chamber", mobs: ["brute", "skeleton", "hexer", "bat", "bomber"], elite: 0, shield: [1], hearts: [[400, 440]], chests: [[60, 90], [140, 90], [660, 90], [740, 90], [60, 470], [740, 470]], mimics: 0.35 },
+  { name: "Treasure Chamber", mobs: ["brute", "skeleton", "hexer", "hotdog", "bomber"], elite: 0, shield: [1], hearts: [[400, 440]], chests: [[60, 90], [140, 90], [660, 90], [740, 90], [60, 470], [740, 470]], mimics: 0.35 },
   { name: "Dragon of Debt", mobs: ["boss"], hearts: [[300, 460], [500, 460]], chests: [] }
 ];
 const SPAWNS = [[90, 260], [145, 260]];
 /* ---- story mode: Emberfall village (hub) and four regions that unlock in order ---- */
 const HUB_LAYOUT = { name: "Emberfall Village", mobs: [], hearts: [], chests: [], theme: 5, track: 5 };
-const HUB_SPAWNS = [[360, 440], [440, 440]];
+const HUB_SPAWNS = [[760, 940], [840, 940]];
 const keepLayouts = roomLayouts.map((l, i) => Object.assign({}, l, { theme: i, track: i, tier: i }));
 keepLayouts[4].name = "Dragon of Debt";
 const REGIONS = {
-  greenwood: { name: "Greenwood", gx: 120, req: [], layouts: [
+  greenwood: { name: "Greenwood", gx: 240, req: [], layouts: [
     { name: "Mossy Path", mobs: ["slime", "slime", "slime", "bat"], hearts: [[330, 450]], chests: [[700, 100], [120, 470]], theme: 6, track: 0, tier: 0 },
     { name: "Hollow Oak", mobs: ["slime", "bat", "bat", "archer", "skeleton"], keeper: 4, hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]], theme: 6, track: 0, tier: 1 },
     { name: "Thorn Warden's Grove", mobs: ["brute", "slime", "slime", "bat"], elite: 0, eliteName: "Thorn Warden", trait: "thorn", keeper: 1, hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470]], theme: 6, track: 0, tier: 1 }] },
-  mire: { name: "Sunken Mire", gx: 280, req: ["greenwood"], layouts: [
+  mire: { name: "Sunken Mire", gx: 560, req: ["greenwood"], layouts: [
     { name: "Bog Crossing", mobs: ["slime", "slime", "hexer", "bat"], hearts: [[330, 450]], chests: [[700, 100], [120, 470]], theme: 7, track: 1, tier: 1 },
     { name: "Mushroom Hollow", mobs: ["hexer", "bomber", "slime", "skeleton", "bat"], keeper: 3, shield: [3], hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]], theme: 7, track: 1, tier: 1 },
     { name: "The Mire Mother's Pool", mobs: ["brute", "hexer", "hexer", "bomber"], elite: 0, eliteName: "Mire Mother", trait: "mire", keeper: 1, hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470]], theme: 7, track: 1, tier: 2 }] },
-  coast: { name: "Shattered Coast", gx: 440, req: ["mire"], layouts: [
+  coast: { name: "Shattered Coast", gx: 880, req: ["mire"], layouts: [
     { name: "Wreck Beach", mobs: ["skeleton", "skeleton", "archer", "bomber"], shield: [0], hearts: [[330, 450]], chests: [[700, 100], [120, 470]], theme: 8, track: 2, tier: 1 },
     { name: "Cliffside Battery", mobs: ["archer", "archer", "hexer", "skeleton", "bomber"], keeper: 3, shield: [3], hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]], theme: 8, track: 2, tier: 2 },
     { name: "Tidebreaker's Cove", mobs: ["brute", "skeleton", "archer", "bomber", "hexer"], elite: 0, eliteName: "Tidebreaker", trait: "tide", keeper: 2, shield: [1], hearts: [[400, 440]], chests: [[60, 90], [740, 90], [60, 470], [740, 470]], theme: 8, track: 2, tier: 2 }] },
-  keep: { name: "The Keep of Debt", gx: 650, req: ["greenwood", "mire", "coast"], layouts: keepLayouts }
+  frank: { name: "Frank's Fairground", gx: 1090, req: ["mire"], bonus: true, layouts: [
+    { name: "The Midway", mobs: ["hotdog", "hotdog", "hotdog", "slime"], hearts: [[330, 450]], chests: [[700, 100], [120, 470]], theme: 9, track: 3, tier: 1 },
+    { name: "Condiment Alley", mobs: ["hotdog", "hotdog", "bomber", "bat", "hotdog"], keeper: 4, hearts: [[400, 450]], chests: [[100, 100], [700, 470], [400, 100]], theme: 9, track: 3, tier: 2 },
+    { name: "Big Frank's Stand", mobs: ["hotdog", "hotdog", "hotdog", "bomber"], elite: 0, eliteName: "Big Frank", trait: "noodle", keeper: 1, hearts: [[400, 440]], chests: [[90, 100], [710, 100], [90, 470], [710, 470]], theme: 9, track: 3, tier: 2 }] },
+  keep: { name: "The Keep of Debt", gx: 1300, req: ["greenwood", "mire", "coast"], layouts: keepLayouts }
 };
 const REGION_IDS = Object.keys(REGIONS);
 const QUESTS = { pests: { kind: "slime", n: 12, gold: 70 }, archers: { kind: "archer", n: 8, item: "beret" }, chests: { kind: "chest", n: 8, gold: 30, item: "charm" } };
@@ -110,8 +115,10 @@ const lastOf = room => (room.layouts || roomLayouts).length - 1;
 const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const clampX = x => clamp(x, 28, ROOM_W - 28);
-const clampY = y => clamp(y, 55, ROOM_H - 28);
+const HUB_W = 1600, HUB_H = 1040;
+const wW = room => (room && room.scene === "hub" && room.story ? HUB_W : ROOM_W), wH = room => (room && room.scene === "hub" && room.story ? HUB_H : ROOM_H);
+const clampX = (room, x) => clamp(x, 28, wW(room) - 28);
+const clampY = (room, y) => clamp(y, 55, wH(room) - 28);
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const rand = room => room.rng ? room.rng() : Math.random();
 
@@ -215,7 +222,7 @@ function publicState(room) {
     code: room.code, stage: room.stage, key: room.key, finished: room.finished, gameOver: room.gameOver,
     waiting: !room.started, daily: room.daily, diff: room.diff, paused: room.paused, pausedBy: room.pausedBy,
     retry: room.retry.size, canRetry: room.gameOver && !room.finished && (room.stage > 0 || !!room.story) && room.scene !== "hub", rematch: room.rematch.size, needRematch: Object.keys(room.players).length, lastStage: lastOf(room), stageTotal: lastOf(room) + 1, roomName: LAY(room).name,
-    scene: room.scene, region: room.region, theme: LAY(room).theme !== undefined ? LAY(room).theme : room.stage, track: LAY(room).track !== undefined ? LAY(room).track : room.stage,
+    scene: room.scene, ww: wW(room), wh: wH(room), region: room.region, theme: LAY(room).theme !== undefined ? LAY(room).theme : room.stage, track: LAY(room).track !== undefined ? LAY(room).track : room.stage,
     story: room.story ? { done: [...room.story.done], q: room.story.q, claimed: [...room.story.claimed] } : null, gate: room.gate, eliteName: LAY(room).eliteName || null,
     keyDrop: room.keyDrop,
     players: Object.values(room.players).map(p => ({
@@ -290,7 +297,7 @@ function finishStory(room) {
 function hubTick(room, all, alive, now, dt) {
   // every living hero must stand in the same gate for a moment to travel
   let gid = null;
-  for (const id of REGION_IDS) { const g = REGIONS[id]; if (alive.every(p => Math.abs(p.x - g.gx) < 62 && p.y < 112)) { gid = id; break; } }
+  for (const id of REGION_IDS) { const g = REGIONS[id]; if (alive.every(p => Math.abs(p.x - g.gx) < 56 && p.y < 112)) { gid = id; break; } }
   alive.forEach(p => { p.gateT = gid ? (p.gateT || 0) + dt : 0; });
   if (!gid) { room.gate = null; return; }
   const t = Math.min(...alive.map(p => p.gateT || 0));
@@ -413,16 +420,16 @@ io.on("connection", socket => {
     const reach = (knight ? 116 : 96) + gs.reach + (pound ? 26 : 0) + (lunge ? 34 : 0), width = (knight ? 64 : 48) + (pound ? 18 : 0);
     const dmg = 2 + (p.up.dmg || 0) + gs.dmg + (pound ? 2 : 0) + (lunge ? 1 : 0) + (crit ? 2 : 0);
     const kb = pound ? 70 : 40;
-    if (p.cls) { /* movement burst on swing */ const step = lunge ? 0 : spin ? 0 : pound ? 6 : 14; p.x = clampX(p.x + dx * step); p.y = clampY(p.y + dy * step); }
+    if (p.cls) { /* movement burst on swing */ const step = lunge ? 0 : spin ? 0 : pound ? 6 : 14; p.x = clampX(room, p.x + dx * step); p.y = clampY(room, p.y + dy * step); }
     const hitSet = new Set();
     const strike = (e, dm, stunMs, kx, ky) => {
       const big = e.kind === "boss" ? 1 : 0; hitSet.add(e.id);
       if (e.shield && !spin && !pound && now >= e.stunUntil) {            // steel shields turn plain slashes: spin, pound or a stun breaks the guard
-        e.hp -= 1; e.hitUntil = now + 120; e.x = clampX(e.x + dx * 8); e.y = clampY(e.y + dy * 8);
+        e.hp -= 1; e.hitUntil = now + 120; e.x = clampX(room, e.x + dx * 8); e.y = clampY(room, e.y + dy * 8);
         fx(room, "blocked", { x: e.x, y: e.y }); if (e.hp <= 0) killEnemy(room, e, p); return;
       }
       e.hp -= dm; e.hitUntil = now + 200; if (!big) e.windupUntil = 0;
-      if (!big) { e.stunUntil = Math.max(e.stunUntil, now + stunMs); e.x = clampX(e.x + kx); e.y = clampY(e.y + ky); }
+      if (!big) { e.stunUntil = Math.max(e.stunUntil, now + stunMs); e.x = clampX(room, e.x + kx); e.y = clampY(room, e.y + ky); }
       if (e.hp <= 0) killEnemy(room, e, p); else fx(room, "hit", { x: e.x, y: e.y, crit, big: pound });
     };
     room.enemies.forEach(e => {
@@ -437,7 +444,7 @@ io.on("connection", socket => {
       if (along >= -8 && along < reach + big * 40 && side < width + big * 34) strike(e, dmg, pound ? 520 : 300, dx * kb, dy * kb);
     });
     if (pound) {                                               // ground shockwave where the weapon lands
-      const ix = clampX(p.x + dx * 78), iy = clampY(p.y + dy * 78), R = 108;
+      const ix = clampX(room, p.x + dx * 78), iy = clampY(room, p.y + dy * 78), R = 108;
       fx(room, "pound", { x: ix, y: iy, cls: p.cls });
       room.enemies.forEach(e => {
         if (!e.alive || hitSet.has(e.id)) return;
@@ -470,7 +477,7 @@ io.on("connection", socket => {
       const boss = e.kind === "boss";
       e.stunUntil = now + (boss ? 450 : (knight ? 1400 : NOTE_STUN) + gearStats(p).stun); e.windupUntil = boss ? e.windupUntil : 0; e.castUntil = boss ? e.castUntil : 0; e.hitUntil = now + 120;
       if (knight) {
-        e.hp -= 1; if (!boss) { e.x = clampX(e.x + dx * 70); e.y = clampY(e.y + dy * 70); }
+        e.hp -= 1; if (!boss) { e.x = clampX(room, e.x + dx * 70); e.y = clampY(room, e.y + dy * 70); }
         if (e.hp <= 0) killEnemy(room, e, p);
       }
       fx(room, "stun", { x: e.x, y: e.y });
@@ -635,7 +642,7 @@ function hurtPlayer(room, p, dmg, from, now) {
   if (now < (p.guardUntil || 0)) { fx(room, "blocked", { x: p.x, y: p.y }); return; }
   p.hp = Math.max(0, p.hp - dmg); p.lastHit = now; room.lastHitBy = from.elite ? "warden" : from.kind || "unknown";
   const dx = p.x - from.x, dy = p.y - from.y, d = Math.hypot(dx, dy) || 1;
-  p.x = clampX(p.x + dx / d * 46); p.y = clampY(p.y + dy / d * 46);
+  p.x = clampX(room, p.x + dx / d * 46); p.y = clampY(room, p.y + dy / d * 46);
   fx(room, "hurt", { id: p.id, x: p.x, y: p.y, dmg });
   if (p.hp === 0) {
     p.alive = false; p.reviveT = 0; p.stats.downs++;
@@ -651,7 +658,8 @@ function fireShot(room, x, y, ang, speed = 230, dmg = 1, kind = "arrow") {
 
 function fireTrait(room, e, target) {
   if (e.trait === "thorn") { const b = Math.atan2(target.y - e.y, target.x - e.x); for (let i = -3; i <= 3; i++) fireShot(room, e.x, e.y, b + i * 0.2, 190, 1, "arrow"); }
-  else if (e.trait === "mire") { if (room.enemies.filter(m => m.alive).length < 8) { room.enemies.push(newEnemy(room, "slime", clampX(e.x - 46), clampY(e.y + 30)), newEnemy(room, "slime", clampX(e.x - 46), clampY(e.y - 30))); notice(room, "The Mire Mother births slimes!"); } }
+  else if (e.trait === "mire") { if (room.enemies.filter(m => m.alive).length < 8) { room.enemies.push(newEnemy(room, "slime", clampX(room, e.x - 46), clampY(room, e.y + 30)), newEnemy(room, "slime", clampX(room, e.x - 46), clampY(room, e.y - 30))); notice(room, "The Mire Mother births slimes!"); } }
+  else if (e.trait === "noodle") { const b = Math.atan2(target.y - e.y, target.x - e.x); for (let i = 0; i < 10; i++) fireShot(room, e.x, e.y, b + i * Math.PI / 5, 150, 1, i % 2 ? "ketchup" : "mustard"); e.noodleN = (e.noodleN || 0) + 1; if (e.noodleN % 2 === 0 && room.enemies.filter(m => m.alive).length < 8) { room.enemies.push(newEnemy(room, "hotdog", clampX(room, e.x - 50), clampY(room, e.y + 36))); notice(room, "Big Frank calls for backup!"); } }
   else if (e.trait === "tide") { for (let i = 0; i < 12; i++) fireShot(room, e.x, e.y, i * Math.PI / 6 + 0.1, 135, 1, "hex"); }
   fx(room, "bossfire", { x: e.x, y: e.y });
 }
@@ -685,8 +693,8 @@ function tick() {
       if (dashing) [dx, dy] = p.dashDir;
       const mag = Math.hypot(dx, dy) || 1;
       const speed = dashing ? 520 : 175 * (1 + 0.08 * (p.up.speed || 0) + gearStats(p).speed) * (now < (p.slowUntil || 0) ? 0.55 : 1);
-      p.x = clampX(p.x + dx / mag * speed * dt);
-      p.y = clampY(p.y + dy / mag * speed * dt);
+      p.x = clampX(room, p.x + dx / mag * speed * dt);
+      p.y = clampY(room, p.y + dy / mag * speed * dt);
       if (!dashing && (dx || dy)) p.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
     }
 
@@ -733,6 +741,9 @@ function tick() {
               const v = room.players[e.windupTarget];
               if (v && e.kind === "hexer") { const ba = Math.atan2(v.y - e.y, v.x - e.x); for (const o of [-0.3, 0, 0.3]) fireShot(room, e.x, e.y, ba + o, 140, def.dmg, "hex"); fx(room, "hexcast", { x: e.x, y: e.y }); }
               else if (v) fireShot(room, e.x, e.y, Math.atan2(v.y - e.y, v.x - e.x), 260, def.dmg, "arrow");
+            } else if (e.kind === "hotdog" && !e.elite) {          // two condiment squirts in a narrow fan
+              const v = room.players[e.windupTarget];
+              if (v) { const ba = Math.atan2(v.y - e.y, v.x - e.x); fireShot(room, e.x, e.y, ba - 0.12, 200, def.dmg, "ketchup"); fireShot(room, e.x, e.y, ba + 0.12, 200, def.dmg, "mustard"); fx(room, "squirt", { x: e.x, y: e.y }); }
             } else if (e.kind === "bomber") {                  // BOOM: hurts heroes and any monsters caught in the blast
               const BR = 84; e.alive = false; fx(room, "boom", { x: e.x, y: e.y });
               alive.forEach(v => { if (v.alive && Math.hypot(v.x - e.x, v.y - e.y) < BR && now >= v.dashUntil && now - v.lastHit > HIT_INVULN) hurtPlayer(room, v, def.dmg, e, now); });
@@ -757,8 +768,8 @@ function tick() {
           continue;
         }
         if (now < e.retreatUntil) {
-          e.x = clampX(e.x - dx / d * def.speed * 0.8 * dt);
-          e.y = clampY(e.y - dy / d * def.speed * 0.8 * dt);
+          e.x = clampX(room, e.x - dx / d * def.speed * 0.8 * dt);
+          e.y = clampY(room, e.y - dy / d * def.speed * 0.8 * dt);
           continue;
         }
         let mx = dx / d, my = dy / d;
@@ -768,12 +779,12 @@ function tick() {
           const m = Math.hypot(mx, my) || 1; mx /= m; my /= m;
         }
         if (def.ranged) {                          // archers keep their distance
-          if (d < 170) { e.x = clampX(e.x - mx * def.speed * 1.2 * dt); e.y = clampY(e.y - my * def.speed * 1.2 * dt); }
-          else if (d > 300) { e.x = clampX(e.x + mx * def.speed * dt); e.y = clampY(e.y + my * def.speed * dt); }
+          if (d < 170) { e.x = clampX(room, e.x - mx * def.speed * 1.2 * dt); e.y = clampY(room, e.y - my * def.speed * 1.2 * dt); }
+          else if (d > 300) { e.x = clampX(room, e.x + mx * def.speed * dt); e.y = clampY(room, e.y + my * def.speed * dt); }
           if (now >= e.nextAttackAt && d < 420) { e.windupUntil = now + def.windup; e.windupTarget = target.id; }
           continue;
         }
-        if (d > def.stop) { e.x = clampX(e.x + mx * def.speed * speedMul * dt); e.y = clampY(e.y + my * def.speed * speedMul * dt); }
+        if (d > def.stop) { e.x = clampX(room, e.x + mx * def.speed * speedMul * dt); e.y = clampY(room, e.y + my * def.speed * speedMul * dt); }
         if (d < def.range && now >= e.nextAttackAt) { e.windupUntil = now + def.windup; e.windupTarget = target.id; }
       }
     }
@@ -837,7 +848,7 @@ function tick() {
           room.shop = { ready: new Set(), until: now + SHOP_TIME };
           fx(room, "shopopen");
           notice(room, "Rest stop! Spend your gold, then press READY.");
-        } else if (room.story) { room.story.done.add(room.region); if (room.region === "keep") finishStory(room); else toHub(room, room.region); }
+        } else if (room.story) { const first = !room.story.done.has(room.region); room.story.done.add(room.region); if (room.region === "keep") finishStory(room); else { const rid = room.region; toHub(room, rid); if (rid === "frank" && first) { room.gold += 100; Object.values(room.players).forEach(p => giveItem(room, p, "crown")); notice(room, "Prize from Big Frank: 100 gold and a Crown of Echoes for everyone!"); } } }
         else finishRun(room);
       }
     }

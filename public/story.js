@@ -2,10 +2,11 @@
    Loaded after game.js, which calls into these functions through typeof guards. */
 
 const REGIONS_C = [
-  { id: "greenwood", name: "Greenwood", gx: 120, req: [], col: "90,220,120", icon: "🌿" },
-  { id: "mire", name: "Sunken Mire", gx: 280, req: ["greenwood"], col: "90,220,210", icon: "🍄" },
-  { id: "coast", name: "Shattered Coast", gx: 440, req: ["mire"], col: "110,170,255", icon: "🌊" },
-  { id: "keep", name: "Keep of Debt", gx: 650, req: ["greenwood", "mire", "coast"], col: "255,110,70", icon: "🐉" }
+  { id: "greenwood", name: "Greenwood", gx: 240, req: [], col: "90,220,120", icon: "🌿" },
+  { id: "mire", name: "Sunken Mire", gx: 560, req: ["greenwood"], col: "90,220,210", icon: "🍄" },
+  { id: "coast", name: "Shattered Coast", gx: 880, req: ["mire"], col: "110,170,255", icon: "🌊" },
+  { id: "frank", name: "Frank's Fairground", gx: 1090, req: ["mire"], col: "255,190,70", icon: "🌭", bonus: true },
+  { id: "keep", name: "Keep of Debt", gx: 1300, req: ["greenwood", "mire", "coast"], col: "255,110,70", icon: "🐉" }
 ];
 
 /* ---- saved progress (this device only) ---- */
@@ -30,7 +31,8 @@ THEMES.push(
   { floorA: "#4c7a3e", floorB: "#477238", line: "#3f6a34", speck: "#6b9a52", wall: "#2f6b3a", wallDark: "#1f4a2a", ambient: 0.06, torch: "#ffe9a0", glow: "255,220,150" },
   { floorA: "#35643a", floorB: "#305d35", line: "#2a5230", speck: "#4f8750", wall: "#265c33", wallDark: "#173d22", ambient: 0.34, torch: "#c8ff9a", glow: "170,255,150" },
   { floorA: "#2b4a44", floorB: "#274640", line: "#21403a", speck: "#3f6e62", wall: "#2a4a3c", wallDark: "#183228", ambient: 0.5, torch: "#7dffd8", glow: "100,255,210" },
-  { floorA: "#cdb78a", floorB: "#c5af82", line: "#b89f70", speck: "#e2d2a8", wall: "#7a7f8c", wallDark: "#51566a", ambient: 0.16, torch: "#ffe6b0", glow: "255,230,170" }
+  { floorA: "#cdb78a", floorB: "#c5af82", line: "#b89f70", speck: "#e2d2a8", wall: "#7a7f8c", wallDark: "#51566a", ambient: 0.16, torch: "#ffe6b0", glow: "255,230,170" },
+  { floorA: "#9a7a4a", floorB: "#947046", line: "#7e5f38", speck: "#c9ab72", wall: "#8a3a3a", wallDark: "#5a2222", ambient: 0.2, torch: "#ffd98a", glow: "255,200,120" }
 );
 
 /* ---- outdoor backgrounds ---- */
@@ -60,28 +62,15 @@ function oCottage(g, x, y, w, roof, wall) {
 function oLantern(g, x, y) { g.fillStyle = "#3a3a44"; g.fillRect(x - 1.5, y - 26, 3, 28); g.fillStyle = "#2a2a32"; g.fillRect(x - 6, y - 36, 12, 4); g.fillStyle = "#ffd98a"; g.fillRect(x - 4, y - 32, 8, 8); g.fillStyle = "rgba(255,220,140,.18)"; g.beginPath(); g.arc(x, y - 28, 22, 0, 6.283); g.fill(); }
 
 function buildOutdoorBg(stage) {
-  const c = document.createElement("canvas"); c.width = W * DPR; c.height = H * DPR;
+  const BW = stage === 5 ? 1600 : 800, BH = stage === 5 ? 1040 : 520;
+  const c = document.createElement("canvas"); c.width = BW * DPR; c.height = BH * DPR;
   const g = c.getContext("2d"); g.scale(DPR, DPR);
   const th = THEMES[stage], rng = mulberry(stage * 7919 + 13), R = (a, b) => a + rng() * (b - a);
-  g.fillStyle = th.floorA; g.fillRect(0, 0, W, H);
-  for (let i = 0; i < 1100; i++) { g.fillStyle = rng() < 0.5 ? th.floorB : (rng() < 0.5 ? th.line : th.speck); g.fillRect(R(0, W), R(0, H), R(2, 10), R(1, 4)); }
+  g.fillStyle = th.floorA; g.fillRect(0, 0, BW, BH);
+  for (let i = 0; i < 1100 * (BW * BH) / 416000; i++) { g.fillStyle = rng() < 0.5 ? th.floorB : (rng() < 0.5 ? th.line : th.speck); g.fillRect(R(0, BW), R(0, BH), R(2, 10), R(1, 4)); }
   const free = (x, y) => true;
-  if (stage === 5) {                                                    // ---- Emberfall village
-    const GX = [120, 280, 440, 650];
-    GX.forEach(gx => { g.lineCap = "round"; g.strokeStyle = "#7d6340"; g.lineWidth = 50; g.beginPath(); g.moveTo(gx, 100); g.quadraticCurveTo(gx, 210, 400 + (gx - 400) * 0.3, 250); g.stroke(); g.strokeStyle = "#a88a5c"; g.lineWidth = 40; g.beginPath(); g.moveTo(gx, 100); g.quadraticCurveTo(gx, 210, 400 + (gx - 400) * 0.3, 250); g.stroke();
-      for (let i = 0; i < 26; i++) { g.fillStyle = rng() < 0.5 ? "#8e7248" : "#bb9d6c"; g.fillRect(gx + R(-18, 18), R(104, 230), 3, 2); } });
-    g.save(); g.beginPath(); g.ellipse(400, 305, 205, 120, 0, 0, 6.283); g.fillStyle = "#8d8574"; g.fill(); g.clip();
-    for (let i = 0; i < 260; i++) { const sx = R(190, 610), sy = R(185, 425), sw = R(12, 22), sh = R(8, 13); g.fillStyle = rng() < 0.5 ? "#9b9382" : "#7d7565"; g.beginPath(); g.roundRect(sx, sy, sw, sh, 3); g.fill(); g.strokeStyle = "rgba(0,0,0,.2)"; g.lineWidth = 1; g.stroke(); }
-    g.restore(); g.strokeStyle = "#5b5546"; g.lineWidth = 4; g.beginPath(); g.ellipse(400, 305, 205, 120, 0, 0, 6.283); g.stroke();
-    g.fillStyle = "rgba(0,0,0,.3)"; g.beginPath(); g.ellipse(400, 322, 62, 30, 0, 0, 6.283); g.fill();                // fountain
-    g.fillStyle = "#7d8590"; g.beginPath(); g.ellipse(400, 305, 56, 31, 0, 0, 6.283); g.fill(); g.fillStyle = "#98a1ae"; g.beginPath(); g.ellipse(400, 302, 56, 29, 0, 0, 6.283); g.fill();
-    g.fillStyle = "#3d8fd0"; g.beginPath(); g.ellipse(400, 303, 47, 23, 0, 0, 6.283); g.fill(); g.fillStyle = "rgba(255,255,255,.25)"; g.beginPath(); g.ellipse(388, 297, 20, 6, -0.2, 0, 6.283); g.fill();
-    g.fillStyle = "#8a93a0"; g.fillRect(394, 268, 12, 36); g.fillStyle = "#a8b0bc"; g.beginPath(); g.ellipse(400, 268, 17, 7, 0, 0, 6.283); g.fill(); g.fillStyle = "#6fb6f0"; g.beginPath(); g.ellipse(400, 267, 13, 5, 0, 0, 6.283); g.fill();
-    oCottage(g, 28, 392, 98, "#a8442e", "#d9c9a6"); oCottage(g, 676, 392, 98, "#3f6aa8", "#d9c9a6");
-    for (const [lx, ly] of [[250, 238], [550, 238], [300, 432], [500, 432]]) oLantern(g, lx, ly);
-    g.fillStyle = "#6b4a2a"; g.fillRect(168, 365, 64, 8); g.fillRect(172, 373, 5, 9); g.fillRect(223, 373, 5, 9);                 // bench near the elder
-    for (const [tx, ty, ts] of [[40, 150, 1], [34, 255, 1.1], [762, 150, 1], [766, 250, 1.1], [60, 330, 0.9], [742, 320, 0.9], [190, 175, 0.8], [610, 170, 0.8]]) oTree(g, tx, ty, ts, "#2f7a3a", "#3d9148");
-    for (let i = 0; i < 40; i++) { const x = R(40, 760), y = R(130, 490), ell = ((x - 400) / 215) ** 2 + ((y - 305) / 130) ** 2; if (ell > 1 && !(y < 260 && GX.some(gx => Math.abs(x - gx) < 34)) && !(y > 380 && (x < 140 || x > 660))) { if (rng() < 0.4) oBush(g, x, y, R(0.8, 1.1), "#3b8a42"); else oFlower(g, x, y, ["#ff7a9a", "#ffd34a", "#a98cff", "#ffffff"][i % 4]); } }
+  if (stage === 5) {                                                    // ---- Emberfall village (double size, winding roads)
+    villageBg(g, rng, R, BW, BH);
   } else if (stage === 6) {                                              // ---- Greenwood
     g.lineCap = "round"; for (const [w, col] of [[54, "#5a4328"], [44, "#76593a"]]) { g.strokeStyle = col; g.lineWidth = w; g.beginPath(); g.moveTo(24, 262); g.bezierCurveTo(240, 180, 520, 350, 776, 262); g.stroke(); }
     for (let i = 0; i < 60; i++) { g.fillStyle = rng() < 0.5 ? "#6b5030" : "#8a6c46"; g.fillRect(R(40, 760), 235 + R(0, 50) + Math.sin(i) * 20, 3, 2); }
@@ -97,33 +86,123 @@ function buildOutdoorBg(stage) {
     for (let i = 0; i < 12; i++) oMush(g, R(40, 760), rng() < 0.5 ? R(100, 220) : R(320, 480), rng() < 0.5 ? "#4fd8c0" : "#a98cff", true);
     for (const [tx, ty] of [[50, 120], [160, 96], [640, 100], [748, 130], [60, 440], [740, 450]]) oDead(g, tx, ty, R(0.9, 1.2));
     for (let i = 0; i < 6; i++) { g.fillStyle = "rgba(180,255,230,.05)"; g.beginPath(); g.arc(R(60, 740), R(120, 460), R(50, 90), 0, 6.283); g.fill(); }
-  } else {                                                               // ---- Shattered Coast
-    const sea = g.createLinearGradient(0, 430, 0, H); sea.addColorStop(0, "#3a86c0"); sea.addColorStop(1, "#16406e"); g.fillStyle = "#b59f74"; g.fillRect(0, 405, W, 32); g.fillStyle = sea; g.fillRect(0, 432, W, H - 432);
-    g.strokeStyle = "rgba(255,255,255,.7)"; g.lineWidth = 3; g.beginPath(); for (let x = 0; x <= W; x += 8) { const y = 432 + Math.sin(x / 24) * 3; x ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke();
-    g.strokeStyle = "rgba(255,255,255,.18)"; g.lineWidth = 2; for (let r = 0; r < 3; r++) { g.beginPath(); for (let x = 0; x <= W; x += 8) { const y = 452 + r * 18 + Math.sin(x / 30 + r) * 3; x ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); }
+  } else if (stage === 8) {                                              // ---- Shattered Coast
+    const sea = g.createLinearGradient(0, 430, 0, BH); sea.addColorStop(0, "#3a86c0"); sea.addColorStop(1, "#16406e"); g.fillStyle = "#b59f74"; g.fillRect(0, 405, BW, 32); g.fillStyle = sea; g.fillRect(0, 432, BW, BH - 432);
+    g.strokeStyle = "rgba(255,255,255,.7)"; g.lineWidth = 3; g.beginPath(); for (let x = 0; x <= BW; x += 8) { const y = 432 + Math.sin(x / 24) * 3; x ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke();
+    g.strokeStyle = "rgba(255,255,255,.18)"; g.lineWidth = 2; for (let r = 0; r < 3; r++) { g.beginPath(); for (let x = 0; x <= BW; x += 8) { const y = 452 + r * 18 + Math.sin(x / 30 + r) * 3; x ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); }
     g.lineCap = "round"; g.strokeStyle = "#b89f70"; g.lineWidth = 50; g.beginPath(); g.moveTo(24, 262); g.bezierCurveTo(240, 330, 520, 190, 776, 262); g.stroke(); g.strokeStyle = "#dccb9e"; g.lineWidth = 40; g.beginPath(); g.moveTo(24, 262); g.bezierCurveTo(240, 330, 520, 190, 776, 262); g.stroke();
     for (const [rx, ry] of [[140, 120], [520, 100], [700, 160], [90, 360], [620, 380], [330, 395]]) oRock(g, rx, ry, R(0.9, 1.5), "#7d8290");
     g.strokeStyle = "#5a3d22"; g.lineWidth = 5; for (const [wx, wy] of [[610, 150], [180, 360]]) { g.fillStyle = "rgba(0,0,0,.2)"; g.beginPath(); g.ellipse(wx, wy + 20, 70, 12, 0, 0, 6.283); g.fill(); g.beginPath(); g.moveTo(wx - 60, wy + 20); g.lineTo(wx + 60, wy + 20); g.stroke(); for (let i = -2; i <= 2; i++) { g.beginPath(); g.arc(wx + i * 22, wy + 20, 36 - Math.abs(i) * 6, Math.PI, 0); g.stroke(); } }
     for (let i = 0; i < 26; i++) { const x = R(40, 760), y = R(110, 400); if (Math.abs(y - 262) < 36) continue; const q = rng(); if (q < 0.4) { g.fillStyle = "#f2b8c0"; g.beginPath(); g.ellipse(x, y, 3, 2, 0.4, 0, 6.283); g.fill(); } else if (q < 0.7) { g.fillStyle = "#e8873a"; g.fillRect(x - 3, y - 1, 6, 2); g.fillRect(x - 1, y - 3, 2, 6); } else { g.save(); g.translate(x, y); g.rotate(R(0, 3)); g.fillStyle = "#6b4a2c"; g.fillRect(-12, -2, 24, 4); g.restore(); } }
     for (let i = 0; i < 4; i++) { g.fillStyle = "#6fb6e8"; g.beginPath(); g.ellipse(R(80, 720), R(330, 400), 18, 6, 0, 0, 6.283); g.fill(); }
   }
+  else {                                                                 // ---- Frank's Fairground
+    g.lineCap = "round"; g.strokeStyle = "#b89a62"; g.lineWidth = 52; g.beginPath(); g.moveTo(24, 262); g.bezierCurveTo(260, 230, 540, 300, 776, 262); g.stroke(); g.strokeStyle = "#d4b97c"; g.lineWidth = 42; g.stroke();
+    for (let i = 0; i < 70; i++) { g.fillStyle = rng() < 0.5 ? "#a98a52" : "#e2c98c"; g.fillRect(R(30, 770), 242 + R(0, 42), 2, 1); }
+    for (let i = 0; i < 9; i++) { const x = R(60, 740), y = rng() < 0.5 ? R(120, 215) : R(330, 480), red = rng() < 0.5; g.fillStyle = red ? "#a8261c" : "#c99a10"; g.beginPath(); g.ellipse(x, y, R(16, 30), R(7, 12), 0, 0, 6.283); g.fill(); g.fillStyle = red ? "#e8483c" : "#ffe066"; g.beginPath(); g.ellipse(x - 3, y - 2, 9, 3, 0, 0, 6.283); g.fill(); }
+    [[130, "#c9302c", "#f4efe2"], [330, "#2f6bb0", "#f4efe2"], [560, "#d9a21c", "#c9302c"], [700, "#c9302c", "#f4efe2"]].forEach(([tx, c1, c2], k) => {
+      const by = 112 - k % 2 * 8; g.fillStyle = "rgba(0,0,0,.25)"; g.beginPath(); g.ellipse(tx, by + 3, 38, 7, 0, 0, 6.283); g.fill();
+      g.fillStyle = c2; g.fillRect(tx - 32, by - 26, 64, 28); for (let i = 0; i < 8; i += 2) { g.fillStyle = c1; g.fillRect(tx - 32 + i * 8, by - 26, 8, 28); }
+      for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? c2 : c1; g.beginPath(); g.moveTo(tx - 36 + i * 9, by - 26); g.lineTo(tx - 31 + i * 9, by - 26); g.lineTo(tx, by - 58); g.closePath(); g.fill(); }
+      g.fillStyle = "#3a2a1a"; g.fillRect(tx - 7, by - 18, 14, 20); g.fillStyle = "#e8c452"; g.fillRect(tx - 1, by - 60, 2, 8); g.fillStyle = "#e8402f"; g.fillRect(tx + 1, by - 62, 8, 5);
+    });
+    for (const [cx0, cy0] of [[96, 400], [690, 170]]) { g.fillStyle = "rgba(0,0,0,.25)"; g.beginPath(); g.ellipse(cx0, cy0 + 22, 40, 8, 0, 0, 6.283); g.fill(); g.fillStyle = "#c9302c"; g.fillRect(cx0 - 30, cy0, 60, 24); g.fillStyle = "#ffd23a"; g.fillRect(cx0 - 30, cy0 + 8, 60, 5); g.fillStyle = "#8a8f9a"; g.fillRect(cx0 - 30, cy0 - 4, 60, 5); g.fillStyle = "#3a3a44"; g.beginPath(); g.arc(cx0 - 18, cy0 + 26, 6, 0, 6.283); g.fill(); g.beginPath(); g.arc(cx0 + 18, cy0 + 26, 6, 0, 6.283); g.fill();
+      g.fillStyle = "#5a3d22"; g.fillRect(cx0 - 1, cy0 - 36, 3, 34); for (let i = 0; i < 6; i++) { g.fillStyle = i % 2 ? "#f4efe2" : "#2f6bb0"; g.beginPath(); g.moveTo(cx0, cy0 - 40); g.lineTo(cx0 - 36 + i * 12, cy0 - 20); g.lineTo(cx0 - 24 + i * 12, cy0 - 20); g.closePath(); g.fill(); }
+      g.fillStyle = "#e0a860"; g.beginPath(); g.roundRect(cx0 - 12, cy0 - 12, 24, 8, 4); g.fill(); g.fillStyle = "#bd4630"; g.beginPath(); g.roundRect(cx0 - 10, cy0 - 14, 20, 5, 2.5); g.fill(); }
+    for (let i = 0; i < 5; i++) { const bx = [60, 740, 330, 560, 420][i], by2 = [320, 340, 420, 440, 190][i], bc = ["#e8402f", "#2f6bb0", "#ffd23a", "#43b06a", "#ff7ac0"][i]; g.strokeStyle = "rgba(255,255,255,.5)"; g.lineWidth = 1; g.beginPath(); g.moveTo(bx, by2 + 26); g.lineTo(bx, by2 + 56); g.stroke(); g.fillStyle = bc; g.beginPath(); g.ellipse(bx, by2, 9, 12, 0, 0, 6.283); g.fill(); g.fillStyle = "rgba(255,255,255,.4)"; g.beginPath(); g.ellipse(bx - 3, by2 - 4, 2.5, 4, 0, 0, 6.283); g.fill(); }
+    for (let i = 0; i < 16; i++) { const x = R(40, 760), y = R(120, 480); if (Math.abs(y - 262) < 34) continue; g.fillStyle = "#fff4c8"; g.fillRect(x, y, 3, 3); g.fillStyle = "#f6e29a"; g.fillRect(x + 1, y + 2, 2, 2); }
+  }
   // outer walls, then a foliage or rock fringe over the top
-  bricks(g, 0, 0, W, 54, th); bricks(g, 0, 54, 18, H - 54, th); bricks(g, W - 18, 54, 18, H - 54, th); bricks(g, 0, H - 18, W, 18, th);
+  bricks(g, 0, 0, BW, 54, th); bricks(g, 0, 54, 18, BH - 54, th); bricks(g, BW - 18, 54, 18, BH - 54, th); bricks(g, 0, BH - 18, BW, 18, th);
   if (stage <= 7) {
     const cols = stage === 7 ? ["#1d3a30", "#27483c", "#335a49"] : stage === 6 ? ["#1c5a2c", "#256a35", "#2f8040"] : ["#256b34", "#2f8040", "#3b9a4c"];
-    for (let i = 0; i < 46; i++) { g.fillStyle = cols[i % 3]; g.beginPath(); g.arc(R(0, W), R(8, 52), R(11, 20), 0, 6.283); g.fill(); }
-    for (let i = 0; i < 40; i++) { g.fillStyle = "rgba(255,255,255,.08)"; g.beginPath(); g.arc(R(0, W), R(6, 36), R(3, 8), 0, 6.283); g.fill(); }
+    for (let i = 0; i < 46 * BW / 800; i++) { g.fillStyle = cols[i % 3]; g.beginPath(); g.arc(R(0, BW), R(8, 52), R(11, 20), 0, 6.283); g.fill(); }
+    for (let i = 0; i < 40 * BW / 800; i++) { g.fillStyle = "rgba(255,255,255,.08)"; g.beginPath(); g.arc(R(0, BW), R(6, 36), R(3, 8), 0, 6.283); g.fill(); }
+  } else if (stage === 9) {
+    g.strokeStyle = "#2a1a10"; g.lineWidth = 1.4; g.beginPath(); for (let x = 0; x <= BW; x += 10) { const y = 36 + Math.sin(x / 90) * 6; x ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke();
+    for (let x = 12; x < BW; x += 26) { const y = 36 + Math.sin(x / 90) * 6; g.fillStyle = ["#e8402f", "#ffd23a", "#2f6bb0", "#43b06a"][(x / 26) % 4 | 0]; g.beginPath(); g.moveTo(x - 8, y); g.lineTo(x + 8, y); g.lineTo(x, y + 14); g.closePath(); g.fill(); }
   } else {
-    for (let i = 0; i < 40; i++) { g.fillStyle = i % 2 ? "#6a6f7c" : "#8a8fa0"; g.beginPath(); g.moveTo(R(0, W), 54); g.lineTo(R(0, W), R(6, 30)); g.lineTo(R(0, W), 54); g.fill(); }
+    for (let i = 0; i < 40; i++) { g.fillStyle = i % 2 ? "#6a6f7c" : "#8a8fa0"; g.beginPath(); g.moveTo(R(0, BW), 54); g.lineTo(R(0, BW), R(6, 30)); g.lineTo(R(0, BW), 54); g.fill(); }
   }
-  g.fillStyle = "rgba(0,0,0,.4)"; g.fillRect(0, 46, W, 8); g.fillStyle = "rgba(255,255,255,.12)"; g.fillRect(0, 54, W, 1);
-  const a3 = g.createLinearGradient(0, H - 18, 0, H - 64); a3.addColorStop(0, "rgba(0,0,0,.45)"); a3.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = a3; g.fillRect(18, H - 64, W - 36, 46);
-  const sh = g.createLinearGradient(0, 54, 0, 84); sh.addColorStop(0, "rgba(0,0,0,.4)"); sh.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = sh; g.fillRect(18, 54, W - 36, 30);
+  g.fillStyle = "rgba(0,0,0,.4)"; g.fillRect(0, 46, BW, 8); g.fillStyle = "rgba(255,255,255,.12)"; g.fillRect(0, 54, BW, 1);
+  const a3 = g.createLinearGradient(0, BH - 18, 0, BH - 64); a3.addColorStop(0, "rgba(0,0,0,.45)"); a3.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = a3; g.fillRect(18, BH - 64, BW - 36, 46);
+  const sh = g.createLinearGradient(0, 54, 0, 84); sh.addColorStop(0, "rgba(0,0,0,.4)"); sh.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = sh; g.fillRect(18, 54, BW - 36, 30);
   return c;
 }
 
+/* ---- Emberfall village: a 1600x1040 map with winding, jagged dirt roads ---- */
+const VROADS = [];                                                         // road polylines, shared with the scenery placer
+function winding(x0, y0, x1, y1, rng, amp) {                               // jagged wander between two points
+  const d = Math.hypot(x1 - x0, y1 - y0), n = Math.max(5, Math.round(d / 38)), nx = -(y1 - y0) / d, ny = (x1 - x0) / d, ph = rng() * 6.28, fr = 1.3 + rng() * 1.4, pts = [];
+  for (let i = 0; i <= n; i++) { const u = i / n, env = Math.sin(Math.PI * u) ** 0.7, off = (Math.sin(ph + u * fr * 6.283) * amp + (rng() - 0.5) * amp * 0.9) * env + (rng() - 0.5) * 30 * Math.sin(Math.PI * u); pts.push([x0 + (x1 - x0) * u + nx * off, y0 + (y1 - y0) * u + ny * off]); }
+  return pts;
+}
+function strokePts(g, pts) {
+  g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length - 1; i++) g.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2);
+  g.lineTo(pts[pts.length - 1][0], pts[pts.length - 1][1]); g.stroke();
+}
+function roadDraw(g, pts, w, rng) {
+  g.lineCap = "round"; g.lineJoin = "round";
+  g.strokeStyle = "#5e4a2c"; g.lineWidth = w + 8; strokePts(g, pts);                                   // dark rutted edge
+  for (let k = 0; k < 3; k++) { const j = pts.map(p => [p[0] + (rng() - 0.5) * 7, p[1] + (rng() - 0.5) * 7]); g.strokeStyle = "#7d6340"; g.lineWidth = w + 2 - k * 3; strokePts(g, j); }   // ragged body
+  g.strokeStyle = "#9a7c4e"; g.lineWidth = w * 0.55; strokePts(g, pts);
+  g.strokeStyle = "rgba(230,205,150,.35)"; g.lineWidth = w * 0.22; strokePts(g, pts.map(p => [p[0] + 1, p[1] - 1]));
+  for (let i = 0; i < pts.length - 1; i++) for (let k = 0; k < 5; k++) { const u = rng(), x = pts[i][0] + (pts[i + 1][0] - pts[i][0]) * u + (rng() - 0.5) * w * 0.8, y = pts[i][1] + (pts[i + 1][1] - pts[i][1]) * u + (rng() - 0.5) * w * 0.8; g.fillStyle = rng() < 0.5 ? "#6e5634" : "#c4a874"; g.fillRect(x, y, 2 + rng() * 2, 2); }
+  VROADS.push(pts);
+}
+function nearRoad(x, y, m) { for (const pts of VROADS) for (let i = 0; i < pts.length - 1; i++) { const ax = pts[i][0], ay = pts[i][1], bx = pts[i + 1][0], by = pts[i + 1][1], dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy || 1, u = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L)); if (Math.hypot(x - (ax + dx * u), y - (ay + dy * u)) < m) return true; } return false; }
+function villageBg(g, rng, R, BW, BH) {
+  VROADS.length = 0;
+  const PX = 800, PY = 610, GXS = [240, 560, 880, 1090, 1300];
+  // patchy grass tones and wildflower meadows
+  for (let i = 0; i < 70; i++) { g.fillStyle = rng() < 0.5 ? "rgba(70,130,60,.18)" : "rgba(120,160,70,.14)"; g.beginPath(); g.ellipse(R(40, BW - 40), R(110, BH - 40), R(50, 140), R(30, 80), rng() * 3, 0, 6.283); g.fill(); }
+  // roads: every gate winds down to the plaza, with side trails to the villagers and the south edge
+  GXS.forEach((gx, i) => roadDraw(g, [[gx, 104]].concat(winding(gx, 112, PX + (gx - PX) * 0.25, PY - 110, rng, 70).slice(1)), 50, rng));
+  roadDraw(g, winding(PX, PY, 410, 690, rng, 40), 38, rng);          // Marn's bench
+  roadDraw(g, winding(PX, PY, 1180, 700, rng, 40), 38, rng);         // Pip's market
+  roadDraw(g, winding(PX, PY - 20, 690, 360, rng, 45), 34, rng);     // Bram's snare field
+  roadDraw(g, winding(PX, PY, 340, 890, rng, 60), 38, rng);          // Nell's cottage
+  roadDraw(g, winding(PX, PY + 60, 800, 960, rng, 50), 52, rng);     // south road, where travelers arrive
+  // gate thresholds
+  GXS.forEach(gx => { for (let k = 0; k < 14; k++) { g.fillStyle = k % 2 ? "#8d8574" : "#9b9382"; g.beginPath(); g.roundRect(gx - 40 + (k % 7) * 12, 108 + ((k / 7) | 0) * 9, 11, 8, 2); g.fill(); } });
+  // plaza with fountain
+  g.save(); g.translate(PX - 400, PY - 305);
+  g.beginPath(); g.ellipse(400, 305, 205, 120, 0, 0, 6.283); g.fillStyle = "#8d8574"; g.fill(); g.clip();
+  for (let i = 0; i < 260; i++) { const sx = R(190, 610), sy = R(185, 425), sw = R(12, 22), sh = R(8, 13); g.fillStyle = rng() < 0.5 ? "#9b9382" : "#7d7565"; g.beginPath(); g.roundRect(sx, sy, sw, sh, 3); g.fill(); g.strokeStyle = "rgba(0,0,0,.2)"; g.lineWidth = 1; g.stroke(); }
+  g.restore(); g.save(); g.translate(PX - 400, PY - 305);
+  g.strokeStyle = "#5b5546"; g.lineWidth = 4; g.beginPath(); g.ellipse(400, 305, 205, 120, 0, 0, 6.283); g.stroke();
+  g.fillStyle = "rgba(0,0,0,.3)"; g.beginPath(); g.ellipse(400, 322, 62, 30, 0, 0, 6.283); g.fill();
+  g.fillStyle = "#7d8590"; g.beginPath(); g.ellipse(400, 305, 56, 31, 0, 0, 6.283); g.fill(); g.fillStyle = "#98a1ae"; g.beginPath(); g.ellipse(400, 302, 56, 29, 0, 0, 6.283); g.fill();
+  g.fillStyle = "#3d8fd0"; g.beginPath(); g.ellipse(400, 303, 47, 23, 0, 0, 6.283); g.fill(); g.fillStyle = "rgba(255,255,255,.25)"; g.beginPath(); g.ellipse(388, 297, 20, 6, -0.2, 0, 6.283); g.fill();
+  g.fillStyle = "#8a93a0"; g.fillRect(394, 268, 12, 36); g.fillStyle = "#a8b0bc"; g.beginPath(); g.ellipse(400, 268, 17, 7, 0, 0, 6.283); g.fill(); g.fillStyle = "#6fb6f0"; g.beginPath(); g.ellipse(400, 267, 13, 5, 0, 0, 6.283); g.fill();
+  g.restore();
+  VROADS.push([[PX - 200, PY], [PX + 200, PY]], [[PX, PY - 115], [PX, PY + 115]]);
+  for (const [lx, ly] of [[PX - 150, PY - 66], [PX + 150, PY - 66], [PX - 100, PY + 124], [PX + 100, PY + 124]]) oLantern(g, lx, ly);
+  // Marn's bench, Pip's stalls, Bram's snare field, Nell's cottage and garden
+  g.fillStyle = "#6b4a2a"; g.fillRect(372, 716, 64, 8); g.fillRect(376, 724, 5, 9); g.fillRect(427, 724, 5, 9);
+  [[1130, 640, "#c9302c"], [1228, 646, "#2f6bb0"]].forEach(([sx, sy, c]) => { g.fillStyle = "rgba(0,0,0,.22)"; g.beginPath(); g.ellipse(sx, sy + 34, 40, 8, 0, 0, 6.283); g.fill(); g.fillStyle = "#6b4a2a"; g.fillRect(sx - 34, sy - 6, 5, 40); g.fillRect(sx + 29, sy - 6, 5, 40); g.fillStyle = "#8a6a44"; g.fillRect(sx - 36, sy + 18, 72, 8);
+    for (let k = 0; k < 6; k++) { g.fillStyle = k % 2 ? "#f4efe2" : c; g.fillRect(sx - 36 + k * 12, sy - 14, 12, 14); } g.fillStyle = c; g.beginPath(); g.moveTo(sx - 38, sy); for (let k = 0; k < 6; k++) g.arc(sx - 32 + k * 12.8, sy, 6.4, Math.PI, 0, true); g.fill();
+    for (let k = 0; k < 5; k++) { g.fillStyle = ["#e8402f", "#ffd23a", "#43b06a", "#b46af0", "#e8402f"][k]; g.beginPath(); g.arc(sx - 24 + k * 12, sy + 14, 4, 0, 6.283); g.fill(); } });
+  g.strokeStyle = "#6b4a2a"; g.lineWidth = 3; for (let k = 0; k < 8; k++) { g.beginPath(); g.moveTo(620 + k * 22, 300); g.lineTo(620 + k * 22, 322); g.stroke(); } g.beginPath(); g.moveTo(614, 306); g.lineTo(790, 306); g.moveTo(614, 316); g.lineTo(790, 316); g.stroke();
+  for (let r = 0; r < 3; r++) for (let k = 0; k < 9; k++) { g.fillStyle = "#6a4a2a"; g.fillRect(630 + k * 18, 384 + r * 16, 12, 5); g.fillStyle = k % 3 ? "#4f9a3c" : "#7bc24c"; g.fillRect(631 + k * 18, 380 + r * 16, 10, 4); }
+  oCottage(g, 410, 780, 100, "#3f6aa8", "#d9c9a6");
+  for (let k = 0; k < 7; k++) oFlower(g, 300 + k * 18 + R(-4, 4), 940 + R(-6, 6), ["#ff7a9a", "#ffd23a", "#fff", "#b46af0"][k % 4]);
+  // cottages, a pond, trees, bushes and rocks, kept off the roads
+  const spots = [[250, 520, "#a8442e"], [1320, 520, "#3f6aa8"], [1380, 760, "#a8442e"], [560, 800, "#3f6aa8"], [1050, 880, "#a8442e"], [140, 760, "#3f6aa8"], [1480, 330, "#a8442e"], [120, 360, "#3f6aa8"]];
+  spots.forEach(([cx, cy, roof]) => { if (!nearRoad(cx + 40, cy + 30, 52)) oCottage(g, cx, cy, 96, roof, "#d9c9a6"); });
+  g.fillStyle = "#2c6d86"; g.beginPath(); g.ellipse(1400, 940, 120, 56, 0.1, 0, 6.283); g.fill(); g.fillStyle = "#3a8aa6"; g.beginPath(); g.ellipse(1396, 936, 104, 44, 0.1, 0, 6.283); g.fill(); g.fillStyle = "rgba(255,255,255,.22)"; g.beginPath(); g.ellipse(1370, 926, 40, 7, 0.1, 0, 6.283); g.fill();
+  for (let i = 0; i < 14; i++) { const a = rng() * 6.283, rx = 120 * 1.05 * Math.cos(a), ry = 56 * 1.05 * Math.sin(a); g.strokeStyle = "#4f8a52"; g.lineWidth = 1.5; g.beginPath(); g.moveTo(1400 + rx, 940 + ry); g.lineTo(1400 + rx + 1, 940 + ry - R(10, 18)); g.stroke(); }
+  const clear = (x, y, m) => !nearRoad(x, y, m) && ((x - PX) / 235) ** 2 + ((y - PY) / 150) ** 2 > 1 && ((x - 1400) / 150) ** 2 + ((y - 940) / 80) ** 2 > 1 && !spots.some(([cx, cy]) => Math.abs(x - cx - 48) < 78 && Math.abs(y - cy - 20) < 70) && !(x > 1080 && x < 1280 && y > 600 && y < 690) && !(x > 330 && x < 530 && y > 640 && y < 840) && !(x > 590 && x < 810 && y > 280 && y < 420);
+  for (let i = 0, n = 0; i < 700 && n < 70; i++) { const x = R(50, BW - 50), y = R(150, BH - 50); if (clear(x, y, 60)) { oTree(g, x, y, R(0.85, 1.3), "#2f7a3a", "#3d9148"); n++; } }
+  for (let i = 0, n = 0; i < 900 && n < 60; i++) { const x = R(40, BW - 40), y = R(130, BH - 40); if (clear(x, y, 42)) { const q = rng(); if (q < 0.4) oBush(g, x, y, R(0.7, 1.1), "#2f7e3c"); else if (q < 0.55) oRock(g, x, y, R(0.7, 1.2), "#8a8f9a"); else oFlower(g, x, y, ["#ff7a9a", "#ffd23a", "#fff", "#b46af0"][(rng() * 4) | 0]); n++; } }
+  for (let i = 0; i < 20; i++) { const x = R(40, BW - 40), y = R(500, BH - 50); if (clear(x, y, 36)) for (let k = 0; k < 5; k++) oFlower(g, x + R(-12, 12), y + R(-8, 8), ["#ff7a9a", "#ffd23a", "#fff", "#b46af0"][(rng() * 4) | 0]); }
+  // dense treeline along the west, east and south edges so the world feels bounded
+  for (let i = 0; i < 50; i++) { const side = i % 3, x = side === 0 ? R(30, 90) : side === 1 ? R(BW - 90, BW - 30) : R(30, BW - 30), y = side === 2 ? R(BH - 90, BH - 36) : R(150, BH - 40); if (!nearRoad(x, y, 36)) oTree(g, x, y, R(0.9, 1.3), "#2a7436", "#3a8c46"); }
+}
+
 /* ---- the village: gates and townsfolk ---- */
-const NPCS = [{ id: "marn", name: "Elder Marn", x: 205, y: 335 }, { id: "pip", name: "Pip", x: 592, y: 345 }, { id: "bram", name: "Bram", x: 345, y: 170 }, { id: "nell", name: "Nell", x: 170, y: 452 }];
+const NPCS = [{ id: "marn", name: "Elder Marn", x: 410, y: 690 }, { id: "pip", name: "Pip", x: 1180, y: 700 }, { id: "bram", name: "Bram", x: 690, y: 350 }, { id: "nell", name: "Nell", x: 340, y: 890 }];
 const QUEST_DEF = { pests: { who: "bram", kind: "slime", n: 12, label: "slimes", reward: "70 gold" }, archers: { who: "bram", kind: "archer", n: 8, label: "archers", reward: "a Plumed Beret", after: "pests" }, chests: { who: "nell", kind: "chest", n: 8, label: "chests opened", reward: "30 gold and a Lucky Charm" } };
 const qCount = k => (state && state.story && state.story.q && state.story.q[k]) || 0;
 const qClaimed = id => !!(state && state.story && state.story.claimed.includes(id));
@@ -150,7 +229,7 @@ function drawGate(r, t) {
   if (done) { const sy = 14 + Math.sin(t * 0.004 + x) * 2; ctx.save(); ctx.shadowColor = "#ffd34a"; ctx.shadowBlur = 10; ctx.fillStyle = "#ffd34a"; ctx.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rad = i % 2 ? 4 : 9; ctx.lineTo(x + Math.cos(a) * rad, sy + 10 + Math.sin(a) * rad); } ctx.closePath(); ctx.fill(); ctx.restore(); }
   if (gt && !gt.locked) { ctx.strokeStyle = "rgba(255,235,150,.95)"; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x, oy + oh - 6, 28, -Math.PI / 2, -Math.PI / 2 + 6.283 * gt.p); ctx.stroke(); }
   ctx.font = "bold 9px 'Press Start 2P',monospace"; ctx.textAlign = "center"; ctx.fillStyle = "rgba(0,0,0,.7)"; ctx.fillText(r.name.toUpperCase(), x + 1, 125); ctx.fillStyle = locked ? "#9aa1b0" : "#fff2c4"; ctx.fillText(r.name.toUpperCase(), x, 124);
-  ctx.font = "bold 8px 'Press Start 2P',monospace"; ctx.fillStyle = locked ? "#c06a6a" : done ? "#ffd34a" : `rgb(${r.col})`; ctx.fillText(locked ? "SEALED" : done ? "CLEARED" : "OPEN", x, 138);
+  ctx.font = "bold 8px 'Press Start 2P',monospace"; ctx.fillStyle = locked ? "#c06a6a" : done ? "#ffd34a" : `rgb(${r.col})`; ctx.fillText(locked ? "SEALED" : done ? "CLEARED" : r.bonus ? "BONUS" : "OPEN", x, 138);
 }
 function drawMarn(x, y, t) {
   shadow(x, y + 24, 16); const b = Math.sin(t * 0.003) * 1;
@@ -201,7 +280,7 @@ function drawHub(t) {
   REGIONS_C.forEach(r => drawGate(r, t));
   drawMarn(NPCS[0].x, NPCS[0].y, t); drawPip(NPCS[1].x, NPCS[1].y, t); drawBram(NPCS[2].x, NPCS[2].y, t); drawNell(NPCS[3].x, NPCS[3].y, t);
   for (const n of NPCS) { const qid = questFor(n.id); if (qid) questMark(n.x, n.y - 54, t, qid); }
-  for (let i = 0; i < 5; i++) { const a = t * 0.004 + i * 1.3; ctx.fillStyle = "rgba(220,245,255,.7)"; ctx.fillRect(400 + Math.cos(a) * 14, 270 + (a * 6) % 18 - Math.sin(a) * 2, 2, 2); }   // fountain spray
+  for (let i = 0; i < 5; i++) { const a = t * 0.004 + i * 1.3; ctx.fillStyle = "rgba(220,245,255,.7)"; ctx.fillRect(800 + Math.cos(a) * 14, 575 + (a * 6) % 18 - Math.sin(a) * 2, 2, 2); }   // fountain spray
   const n = nearNpc();
   if (n && !dlgActive) { const bx = n.id === "pip" ? n.x : n.x, by = n.y - 64; ctx.font = "bold 8px 'Press Start 2P',monospace"; const w = ctx.measureText(n.name.toUpperCase() + ": SPACE").width + 16; rr(bx - w / 2, by - 12, w, 20, 5, "rgba(8,12,20,.85)"); ctx.fillStyle = "#ffe08a"; ctx.textAlign = "center"; ctx.fillText(n.name.toUpperCase() + ": SPACE", bx, by + 2); }
 }
@@ -224,13 +303,15 @@ const BEATS = {
   intro: [[MARN, "Easy, travelers. You made it to Emberfall. Not many do these days."], [MARN, "The Dragon of Debt took the Keep on the hill and swore the whole valley owes him. Every road now pays a toll."], [MARN, "Three Wardens collect it, one in Greenwood, one in the Sunken Mire and one on the Shattered Coast. Each guards a sigil."], [MARN, "Bring me all three and the Keep's seal will break. Walk into the Greenwood gate to begin. Press Space near me or Pip when you need us."]],
   greenwood: [[MARN, "The Thorn sigil! Feel it hum? The Warden's grip on Greenwood is broken."], [MARN, "The Sunken Mire is next. Hexers there fire slowing orbs, so keep moving. Visit Pip first, gold is no good in a swamp."]],
   mire: [[MARN, "The Bog sigil. The Mire Mother ran a tight swamp, I will give her that. Two down."], [MARN, "The coast bites back. Archers on the cliffs, and the Tidebreaker in the cove. Stay close to your partner."]],
+  frank: [[MARN, "Big Frank is down. The spaghetti is still wriggling, so I would not touch it."], [MARN, "Nobody is sure where the hot dog people came from. Nobody asked. Eat somewhere else for a while."]],
   coast: [[MARN, "All three sigils! Hear that crack? The Keep's seal is breaking, and the Dragon knows you are coming."], [MARN, "Rest, spend your gold and gear up. When you are ready, the gate on the right leads to the Keep of Debt."]]
 };
-const ENTER = { greenwood: ["Greenwood", "The old road is overgrown. Something heavy has been stomping through it."], mire: ["Sunken Mire", "The mire swallows sound. Watch for orbs that slow you down."], coast: ["Shattered Coast", "Wreckage and gulls. And archers, always archers."], keep: ["Keep of Debt", "Every stone here has a price tag. Find the key, reach the dragon."] };
+const ENTER = { greenwood: ["Greenwood", "The old road is overgrown. Something heavy has been stomping through it."], mire: ["Sunken Mire", "The mire swallows sound. Watch for orbs that slow you down."], coast: ["Shattered Coast", "Wreckage and gulls. And archers, always archers."], frank: ["Frank's Fairground", "Smell that? Ketchup, mustard and bad intentions. Those hot dogs squirt from a distance, so close in or dodge sideways."], keep: ["Keep of Debt", "Every stone here has a price tag. Find the key, reach the dragon."] };
 function marnHint() {
   const d = state.story.done;
   if (!d.includes("greenwood")) return [[MARN, "Start with the Greenwood gate, top left. The Thorn Warden holds the first sigil. Stay together and dash out of red rings."]];
   if (!d.includes("mire")) return [[MARN, "The Sunken Mire is next. Hexers slow you down, so keep moving. Bombers are loud for a reason."]];
+  if (d.includes("mire") && !d.includes("frank") && !d.includes("coast")) return [[MARN, "The coast is next. And between us, a fairground opened east of the Mire. Smells like hot dogs. I have a bad feeling."]];
   if (!d.includes("coast")) return [[MARN, "Only the coast remains. Archers on the cliffs, and the Tidebreaker waits in the cove. Spend your gold with Pip first."]];
   return [[MARN, "Three sigils, and the Keep's seal is cracked. The gate on the right leads to the Dragon of Debt. Bring everything you have."]];
 }
@@ -282,9 +363,9 @@ function drawWorldMap() {
   for (let i = 0; i < 28; i++) { const x = 30 + rng() * (Wm - 60), y = 30 + rng() * (Hm - 60); g.fillStyle = "rgba(60,110,50,.35)"; g.beginPath(); g.arc(x, y, 6 + rng() * 6, 0, 6.283); g.fill(); }
   g.fillStyle = "rgba(60,120,190,.5)"; g.beginPath(); g.moveTo(Wm * 0.38, Hm); g.quadraticCurveTo(Wm * 0.55, Hm * 0.8, Wm * 0.75, Hm); g.fill();
   g.fillStyle = "rgba(60,120,190,.4)"; g.beginPath(); g.ellipse(Wm * 0.78, -6, Wm * 0.22, 46, 0, 0, 6.283); g.fill();
-  const P = { home: [330, 290], greenwood: [100, 205], mire: [220, 105], coast: [420, 88], keep: [560, 190] };
+  const P = { home: [330, 290], greenwood: [100, 205], mire: [220, 105], coast: [420, 88], frank: [500, 270], keep: [560, 190] };
   const road = [P.home, P.greenwood, P.mire, P.coast, P.keep];
-  g.setLineDash([9, 7]); g.strokeStyle = "#6b4a2a"; g.lineWidth = 4; g.beginPath(); road.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.stroke(); g.beginPath(); g.moveTo(P.home[0], P.home[1]); g.lineTo(P.keep[0], P.keep[1]); g.globalAlpha = 0.35; g.stroke(); g.globalAlpha = 1; g.setLineDash([]);
+  g.setLineDash([9, 7]); g.strokeStyle = "#6b4a2a"; g.lineWidth = 4; g.beginPath(); road.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.stroke(); g.beginPath(); g.moveTo(P.home[0], P.home[1]); g.lineTo(P.frank[0], P.frank[1]); g.lineTo(P.keep[0], P.keep[1]); g.globalAlpha = 0.5; g.stroke(); g.globalAlpha = 1; g.setLineDash([]);
   const node = (id, [x, y], label, col, icon) => {
     const isDone = done.includes(id), reg = REGIONS_C.find(r => r.id === id), locked = reg && !reg.req.every(q => done.includes(q));
     g.fillStyle = "rgba(0,0,0,.3)"; g.beginPath(); g.ellipse(x, y + 16, 24, 7, 0, 0, 6.283); g.fill();
@@ -328,10 +409,10 @@ function storyOnState(s) {
   if (s.scene !== "hub" && hubShopOpen) closeHubShop();
   if (s.scene === "hub") $("cap").classList.add("hidden");
   if (s.scene === "hub") {
-    if (hubShopOpen) { const me = s.players.find(p => p.id === myId); if (me && Math.hypot(me.x - 630, me.y - 345) > 210) closeHubShop(); }
+    if (hubShopOpen) { const me = s.players.find(p => p.id === myId); if (me && Math.hypot(me.x - 1220, me.y - 700) > 210) closeHubShop(); }
     if (!dlgActive && !s.waiting && !s.paused && !s.finished && !s.gameOver) {
       if (!WORLD.seen.intro) { WORLD.seen.intro = 1; saveWorld(); say(BEATS.intro); }
-      else for (const id of ["greenwood", "mire", "coast"]) if (s.story.done.includes(id) && !WORLD.seen["done_" + id]) { WORLD.seen["done_" + id] = 1; saveWorld(); say(BEATS[id]); break; }
+      else for (const id of ["greenwood", "mire", "coast", "frank"]) if (s.story.done.includes(id) && !WORLD.seen["done_" + id]) { WORLD.seen["done_" + id] = 1; saveWorld(); say(BEATS[id]); break; }
     }
   } else if (s.stage === 0 && ENTER[s.region] && !WORLD.seen["enter_" + s.region]) { WORLD.seen["enter_" + s.region] = 1; saveWorld(); narrate(ENTER[s.region][0], ENTER[s.region][1]); }
   if (mapOpen) drawWorldMap();
