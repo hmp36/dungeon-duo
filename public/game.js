@@ -100,6 +100,15 @@ const DIFF_DESC = { easy: "7 hearts to start, monsters have about 30% less healt
 function pickDiff(d) { myDiff = d; document.querySelectorAll(".dbtn").forEach(b => b.classList.toggle("on", b.dataset.d === d)); $("diffDesc").textContent = DIFF_DESC[d]; }
 document.querySelectorAll(".dbtn").forEach(b => b.onclick = () => pickDiff(b.dataset.d));
 pickDiff("normal");
+// 3D view (opt-in beta). The module is only downloaded when someone turns it on.
+window.RSG = { get state() { return state; }, get myId() { return myId; }, get code() { return roomCode; } };
+function set3d(on) {
+  try { localStorage.setItem("rs_3d", on ? "1" : "0"); } catch (e) {}
+  if (!on) { if (window.RS3D) RS3D.setOn(false); return; }
+  if (window.RS3D) { RS3D.setOn(true); return; }
+  import("./view3d.js?v=1").then(() => RS3D.setOn(true)).catch(err => { console.error(err); $("view3dChk").checked = false; showError("3D view could not load on this device."); });
+}
+{ let want = false; try { want = /[?&]3d=1/.test(location.search) || localStorage.getItem("rs_3d") === "1"; } catch (e) {} $("view3dChk").checked = want; $("view3dChk").onchange = e => set3d(e.target.checked); if (want) set3d(true); }
 const createRoom = solo => { audio(); socket.emit("createRoom", { name: $("playerName").value.trim() || "Hero", cls: myCls, daily: $("dailyChk").checked, diff: myDiff, story: $("storyChk").checked && !$("dailyChk").checked, world: typeof loadWorld === "function" ? loadWorld() : null }, r => { enterRoom(r); if (solo && r.ok) socket.emit("startSolo"); }); };
 $("createBtn").onclick = () => createRoom(false);
 $("soloLobbyBtn").onclick = () => createRoom(true);   // solo run with a CPU partner fighting at your side
@@ -442,6 +451,7 @@ function burst(x, y, col, n, sp, life, size, grav = 0) {
 function floater(x, y, text, col) { floats.push({ x, y, text, col, life: 900, max: 900 }); }
 const KIND_COL = { hotdog: "#e8a23c", hexer: "#9b6bd6", bomber: "#ff8a3c", slime: "#5cc86b", skeleton: "#e8e4d4", bat: "#8e5bc4", brute: "#c0503b" };
 function handleFx(f) {
+  if (window.RS3D && RS3D.active()) RS3D.fx(f);
   const now = vnow();
   switch (f.type) {
     case "swing": swing[f.id] = { t: now, k: f.kind || 0 }; sfx.swing(); if (f.kind === 4) setTimeout(() => sfx.swing(), 110); break;
@@ -1222,6 +1232,8 @@ function updateCam() {                                                // the vil
   if (lastScene !== "hub") { camX = tx; camY = ty; lastScene = "hub"; } else { camX += (tx - camX) * 0.14; camY += (ty - camY) * 0.14; }
 }
 function render(t) {
+  if (window.RS3D && RS3D.active()) { splats.length = rings.length = parts.length = floats.length = noteGlyphs.length = 0; RS3D.frame(t); return; }   // opt-in 3D view draws instead
+  if (window.RS3D) RS3D.frame(t);
   const dt = Math.min(50, t - (lastTs || t)); lastTs = t; frame++;
   const stage = state ? (state.theme !== undefined ? state.theme : state.stage) : 0, th = THEMES[stage];
   ctx.save(); ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
