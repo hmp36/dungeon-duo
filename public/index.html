@@ -18,7 +18,7 @@
   <meta name="twitter:description" content="Two heroes, one dragon. Plays in your browser.">
   <meta name="twitter:image" content="https://dungeon-duo-ykqa.onrender.com/img/og.jpg">
   <meta name="theme-color" content="#10131b">
-  <link rel="stylesheet" href="style.css?v=27">
+  <link rel="stylesheet" href="style.css?v=28">
 </head>
 <body>
   <div id="conn" class="conn hidden" role="status"></div>
@@ -31,7 +31,7 @@
         <div class="feat"><span>2 heroes</span></div></div>
     </section>
     <div id="howto" class="modal hidden"><div class="modalbox"><button id="howClose" class="secondary closebtn">CLOSE</button><h2>HOW TO PLAY</h2>
-      <div class="how2"><div><h3>CONTROLS</h3><p><b>Move</b> WASD or arrows<br><b>Attack</b> Space<br><b>Ability</b> Q (riff stun or shield bash)<br><b>Special</b> R (heal song or guard)<br><b>Pause</b> P (either hero can pause for both)<br><b>Dash</b> Shift (brief invulnerability)<br>On a phone, use the on-screen buttons.</p>
+      <div class="how2"><div><h3>CONTROLS</h3><p><b>Move</b> WASD or arrows<br><b>Attack</b> Space<br><b>Ability</b> Q (riff stun or shield bash)<br><b>Special</b> R (heal song or guard)<br><b>Pause</b> P (either hero can pause for both)<br><b>Dash</b> Shift (brief invulnerability)<br>On a phone, use the on-screen buttons.<br>Playing alone? Pick PLAY SOLO WITH A CPU PARTNER and a computer hero fights beside you. If a friend joins later, they take its place.</p>
       <h3>STORY MODE</h3><p>Start in Emberfall village. Walk into a gate (every living hero together) to travel. Beat the Warden at the end of Greenwood, the Sunken Mire and the Shattered Coast to earn three sigils, then break into the Keep of Debt. Press Space near Elder Marn to talk, Space near Pip to shop, M for the map.</p>
       <h3>GOAL</h3><p>Clear each room, get the key from the Keeper in the Crypt, then reach the exit together. Smash chests for gold (beware of mimics), spend it at rest stops, and beat the dragon.</p>
       <h3>TIPS</h3><p>Pick a difficulty when you create a room: Easy has more hearts and softer monsters, Hard has fewer hearts and tougher ones (with a score bonus). Watch for the Iron Warden mini-boss in the Treasure Chamber. When a run ends, press PLAY AGAIN to go straight back in. Red rings mean a hit is coming. Stand next to a fallen friend to revive them. Hearts can lift you above your starting 5.</p></div>
@@ -49,6 +49,7 @@
         <div class="diffpick"><button type="button" data-d="easy" class="dbtn">EASY</button><button type="button" data-d="normal" class="dbtn on">NORMAL</button><button type="button" data-d="hard" class="dbtn">HARD</button></div>
         <p id="diffDesc" class="clsdesc"></p>
         <button id="createBtn" class="primary">CREATE A ROOM</button>
+        <button id="soloLobbyBtn" class="secondary">PLAY SOLO WITH A CPU PARTNER</button>
         <div class="divider"><span>OR JOIN A FRIEND</span></div>
         <label for="roomCode">ROOM CODE</label><input id="roomCode" maxlength="6" placeholder="K7M4QX" autocomplete="off">
         <button id="joinBtn" class="secondary">JOIN ROOM</button><p id="lobbyError" class="error"></p>
@@ -64,7 +65,7 @@
         <div class="codebox"><small>ROOM CODE</small><strong id="codeLabel">------</strong><button id="copyBtn">INVITE LINK</button></div>
       </div>
       <div class="stage-wrap"><canvas id="gameCanvas" width="800" height="520"></canvas><div id="dlg" class="hidden"><b id="dlgName"></b><div id="dlgText"></div><small>SPACE or tap to continue • ESC to skip</small></div><div id="cap" class="hidden"></div><div id="mapOv" class="overlay hidden"><canvas id="mapCv" width="640" height="360" style="max-width:94%;border-radius:8px"></canvas><button id="mapClose" class="secondary" style="margin-top:10px">CLOSE MAP</button></div><div id="emoteBar" class="emotebar"><button data-e="0" aria-label="Help">🆘</button><button data-e="1" aria-label="Over here">👉</button><button data-e="2" aria-label="Nice">👍</button><button data-e="3" aria-label="Watch out">⚠️</button></div><div id="shop" class="overlay hidden"></div><div id="gear" class="gearpanel hidden"></div><div id="overlay" class="overlay hidden"><h2 id="overlayTitle"></h2><p id="overlayText"></p><div id="resultBox"></div><button id="retryBtn" class="primary hidden">RETRY ROOM</button><button id="rematchBtn" class="primary">PLAY AGAIN</button><button id="againBtn" class="secondary">BACK TO LOBBY</button></div><div id="pauseOv" class="overlay hidden"><h2>PAUSED</h2><p id="pauseText"></p><button id="resumeBtn" class="primary">RESUME</button></div></div>
-      <div class="actions"><button id="soloBtn" class="secondary hidden">PLAY SOLO</button><button id="pauseBtn" class="secondary">PAUSE (P)</button><button id="gearBtn" class="secondary">GEAR (I)</button><button id="mapBtn" class="secondary hidden">MAP (M)</button><button id="fsBtn" class="secondary">FULLSCREEN</button><button id="muteBtn" class="secondary">SOUND: ON</button><label class="vol">MUSIC <input id="volMus" type="range" min="0" max="100" step="5"></label><label class="vol">EFFECTS <input id="volSfx" type="range" min="0" max="100" step="5"></label></div>
+      <div class="actions"><button id="soloBtn" class="secondary hidden">PLAY WITH CPU PARTNER</button><button id="pauseBtn" class="secondary">PAUSE (P)</button><button id="gearBtn" class="secondary">GEAR (I)</button><button id="mapBtn" class="secondary hidden">MAP (M)</button><button id="fsBtn" class="secondary">FULLSCREEN</button><button id="muteBtn" class="secondary">SOUND: ON</button><label class="vol">MUSIC <input id="volMus" type="range" min="0" max="100" step="5"></label><label class="vol">EFFECTS <input id="volSfx" type="range" min="0" max="100" step="5"></label></div>
       <div id="touchPad" class="touchpad">
         <div class="dpad">
           <button data-key="up" class="d-up" aria-label="Move up">&#9650;</button>
@@ -79,6 +80,6 @@
     </section>
     <footer>Built for brave friends • Stay together, watch your hearts.</footer>
   </main>
-  <script src="/socket.io/socket.io.js"></script><script src="game.js?v=27"></script><script src="story.js?v=27"></script>
+  <script src="/socket.io/socket.io.js"></script><script src="game.js?v=28"></script><script src="story.js?v=28"></script>
 </body>
 </html>

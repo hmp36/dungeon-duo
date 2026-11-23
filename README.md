@@ -11,7 +11,7 @@ Hosted on Render's free tier, so the first visit after a quiet period can take u
 ## How to play
 
 1. Open the live link, pick a hero (**Troubadour** or **Knight**), and **Create a Room**. Share the six-character code, or tick **Daily Dungeon** for today's shared loot layout.
-2. Your friend picks a hero and joins with the code. Monsters sleep until a teammate joins; **Play solo** starts alone.
+2. Your friend picks a hero and joins with the code. Monsters sleep until a teammate joins; **Play solo** starts with a computer partner (the opposite hero) fighting at your side; if a friend joins, they take its seat.
 3. **Move** WASD/arrows. **Attack** Space. **Ability** Q. **Special** R. **Dash** Shift. On phones use the on-screen buttons.
    - Troubadour: guitar smash (2 dmg), riff that stuns a cone of monsters, healing song.
    - Knight: wide sword slash, shield bash (knockback and stun), guard (brief immunity).

@@ -100,7 +100,9 @@ const DIFF_DESC = { easy: "7 hearts to start, monsters have about 30% less healt
 function pickDiff(d) { myDiff = d; document.querySelectorAll(".dbtn").forEach(b => b.classList.toggle("on", b.dataset.d === d)); $("diffDesc").textContent = DIFF_DESC[d]; }
 document.querySelectorAll(".dbtn").forEach(b => b.onclick = () => pickDiff(b.dataset.d));
 pickDiff("normal");
-$("createBtn").onclick = () => { audio(); socket.emit("createRoom", { name: $("playerName").value.trim() || "Hero", cls: myCls, daily: $("dailyChk").checked, diff: myDiff, story: $("storyChk").checked && !$("dailyChk").checked, world: typeof loadWorld === "function" ? loadWorld() : null }, enterRoom); };
+const createRoom = solo => { audio(); socket.emit("createRoom", { name: $("playerName").value.trim() || "Hero", cls: myCls, daily: $("dailyChk").checked, diff: myDiff, story: $("storyChk").checked && !$("dailyChk").checked, world: typeof loadWorld === "function" ? loadWorld() : null }, r => { enterRoom(r); if (solo && r.ok) socket.emit("startSolo"); }); };
+$("createBtn").onclick = () => createRoom(false);
+$("soloLobbyBtn").onclick = () => createRoom(true);   // solo run with a CPU partner fighting at your side
 function loadBoard() {
   Promise.all([fetch("/api/leaderboard?daily=1").then(r => r.json()), fetch("/api/leaderboard").then(r => r.json())]).then(([d, a]) => {
     const list = (title, arr) => `<h3>${title}</h3>` + (arr.length ? "<ol>" + arr.slice(0, 5).map(b => `<li>${b.names} — ${b.score} pts (${b.time}s)</li>`).join("") + "</ol>" : '<div class="empty">No runs yet. Be the first!</div>');
@@ -138,7 +140,7 @@ $("soloBtn").onclick = () => socket.emit("startSolo");
 // Free hosting naps when idle, so the first connection can take a while. Say so instead of looking broken.
 const connEl = $("conn"); let connTimer = null, everConnected = false;
 function setNetUi(ok) {
-  $("createBtn").disabled = !ok; $("joinBtn").disabled = !ok;
+  $("createBtn").disabled = !ok; $("joinBtn").disabled = !ok; $("soloLobbyBtn").disabled = !ok;
   clearTimeout(connTimer);
   if (ok) { connEl.classList.add("hidden"); return; }
   connTimer = setTimeout(() => {

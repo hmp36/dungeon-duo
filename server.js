@@ -221,7 +221,7 @@ function publicState(room) {
   return {
     code: room.code, stage: room.stage, key: room.key, finished: room.finished, gameOver: room.gameOver,
     waiting: !room.started, daily: room.daily, diff: room.diff, paused: room.paused, pausedBy: room.pausedBy,
-    retry: room.retry.size, canRetry: room.gameOver && !room.finished && (room.stage > 0 || !!room.story) && room.scene !== "hub", rematch: room.rematch.size, needRematch: Object.keys(room.players).length, lastStage: lastOf(room), stageTotal: lastOf(room) + 1, roomName: LAY(room).name,
+    retry: [...room.retry].filter(id => room.players[id] && !room.players[id].isBot).length, canRetry: room.gameOver && !room.finished && (room.stage > 0 || !!room.story) && room.scene !== "hub", rematch: [...room.rematch].filter(id => room.players[id] && !room.players[id].isBot).length, needRematch: humansOf(room).length, lastStage: lastOf(room), stageTotal: lastOf(room) + 1, roomName: LAY(room).name,
     scene: room.scene, ww: wW(room), wh: wH(room), region: room.region, theme: LAY(room).theme !== undefined ? LAY(room).theme : room.stage, track: LAY(room).track !== undefined ? LAY(room).track : room.stage,
     story: room.story ? { done: [...room.story.done], q: room.story.q, claimed: [...room.story.claimed] } : null, gate: room.gate, eliteName: LAY(room).eliteName || null,
     keyDrop: room.keyDrop,
@@ -232,7 +232,7 @@ function publicState(room) {
       specialCd: Math.max(0, Math.min(1, (p.lastSpecial + SPECIAL_COOLDOWN * cdm(p) - now) / (SPECIAL_COOLDOWN * cdm(p)))),
       playing: now < (p.noteUntil || 0), guard: now < (p.guardUntil || 0), up: p.up, inv: p.inv, equip: p.equip, atkKind: p.atkKind, st: gearStats(p),
       hurt: now - p.lastHit < 450, invuln: now - p.lastHit < HIT_INVULN,
-      revive: p.alive ? 0 : Math.min(1, p.reviveT / REVIVE_TIME)
+      revive: p.alive ? 0 : Math.min(1, p.reviveT / REVIVE_TIME), bot: !!p.isBot
     })),
     enemies: room.enemies.filter(alive).map(e => ({
       id: e.id, kind: e.kind, x: e.x, y: e.y, hp: e.hp, maxHp: e.maxHp, alive: true,
@@ -335,6 +335,15 @@ function finishRun(room) {
   notice(room, "The team escaped the dungeon!");
 }
 
+function newPlayer(room, id, name, cls, slot) {
+  return {
+    id, name: String(name).slice(0, 18), slot, cls: cls === "knight" ? "knight" : "bard",
+    x: 100 + slot * 55, y: 260, hp: DIFFS[room.diff].start, alive: true, facing: "right",
+    input: { up: false, down: false, left: false, right: false }, attackUntil: 0,
+    lastAttack: 0, lastNote: 0, lastSpecial: 0, lastHit: 0, lastDash: 0, dashUntil: 0, dashDir: [1, 0], reviveT: 0,
+    noteUntil: 0, guardUntil: 0, up: {}, stats: newStats(), inv: [], equip: { weapon: null, head: null, trinket: null }, combo: 0, comboAt: 0, nextAttackAt: 0, atkKind: 0
+  };
+}
 /* ------------------------------------------------------------------ sockets */
 io.on("connection", socket => {
   const cleanCls = c => (c === "knight" ? "knight" : "bard");
@@ -352,23 +361,18 @@ io.on("connection", socket => {
     code = String(code || "").trim().toUpperCase();
     const room = rooms.get(code);
     if (!room) return cb({ ok: false, error: "Room not found. Check the code or create a new room." });
-    if (Object.keys(room.players).length >= 2) return cb({ ok: false, error: "That room already has two players." });
+    if (humansOf(room).length >= 2) return cb({ ok: false, error: "That room already has two players." });
     if (room.finished || room.gameOver) resetRoom(room);
     joinRoom(socket, room, name, cls, cb);
   });
 
   function joinRoom(sock, room, name, cls, cb) {
-    if (Object.keys(room.players).length >= 2) return cb({ ok: false, error: "That room is full." });
+    if (humansOf(room).length >= 2) return cb({ ok: false, error: "That room is full." });
+    removeBots(room);                                   // a real friend takes the CPU partner's seat
     const used = Object.values(room.players).map(p => p.slot);
     const slot = used.includes(0) ? 1 : 0;
     const index = Object.keys(room.players).length;
-    const player = {
-      id: sock.id, name: String(name || `Player ${index + 1}`).slice(0, 18), slot, cls: cleanCls(cls),
-      x: 100 + slot * 55, y: 260, hp: DIFFS[room.diff].start, alive: true, facing: "right",
-      input: { up: false, down: false, left: false, right: false }, attackUntil: 0,
-      lastAttack: 0, lastNote: 0, lastSpecial: 0, lastHit: 0, lastDash: 0, dashUntil: 0, dashDir: [1, 0], reviveT: 0,
-      noteUntil: 0, guardUntil: 0, up: {}, stats: newStats(), inv: [], equip: { weapon: null, head: null, trinket: null }, combo: 0, comboAt: 0, nextAttackAt: 0, atkKind: 0
-    };
+    const player = newPlayer(room, sock.id, name || `Player ${index + 1}`, cls, slot);
     room.players[sock.id] = player;
     sock.join(room.code);
     sock.data.roomCode = room.code;
@@ -383,7 +387,8 @@ io.on("connection", socket => {
     const room = rooms.get(socket.data.roomCode);
     if (!room || room.started) return;
     startRun(room, 2200);
-    notice(room, "Solo run started. Good luck!");
+    const bot = addBot(room);
+    notice(room, bot ? `${bot.name} is fighting at your side. If a friend joins, they take over the seat.` : "Solo run started. Good luck!");
     broadcast(room);
   });
 
@@ -403,8 +408,109 @@ io.on("connection", socket => {
   });
 
   // Primary attack: guitar smash (bard) or wide sword slash (knight).
-  socket.on("attack", () => {
+  socket.on("attack", () => { const c = ctx(); if (c) doAttack(c.room, c.p, c.now); });
+
+  // Secondary: bard riff (stun cone) or knight shield bash (short stun + knockback).
+  socket.on("note", () => { const c = ctx(); if (c) doNote(c.room, c.p, c.now); });
+
+  // Special: bard healing song (heals nearby heroes) or knight guard (brief immunity).
+  socket.on("special", () => { const c = ctx(); if (c) doSpecial(c.room, c.p, c.now); });
+
+  socket.on("dash", () => { const c = ctx(); if (c) doDash(c.room, c.p, c.now); });
+
+  socket.on("equip", id => {
+    const room = rooms.get(socket.data.roomCode); const p = room?.players[socket.id]; const it = ITEMS[id];
+    if (!room || !p || !it || !p.inv.includes(id)) return;
+    p.inv.splice(p.inv.indexOf(id), 1);
+    const old = p.equip[it.slot]; if (old) p.inv.push(old);
+    p.equip[it.slot] = id; p.hp = Math.min(p.hp, cap(p));
+    fx(room, "equipped", { id: p.id }); broadcast(room);
+  });
+  socket.on("unequip", slot => {
+    const room = rooms.get(socket.data.roomCode); const p = room?.players[socket.id];
+    if (!room || !p || !p.equip || !p.equip[slot]) return;
+    p.inv.push(p.equip[slot]); p.equip[slot] = null; p.hp = Math.min(p.hp, cap(p));
+    broadcast(room);
+  });
+
+  socket.on("claim", id => {
+    const room = rooms.get(socket.data.roomCode); const p = room?.players[socket.id]; const q = QUESTS[id];
+    if (!room || !p || !room.story || room.scene !== "hub" || !q || room.story.claimed.has(id) || (room.story.q[q.kind] || 0) < q.n) return;
+    room.story.claimed.add(id); if (q.gold) room.gold += q.gold; if (q.item) giveItem(room, p, q.item);
+    bump(stats, "questsDone"); notice(room, `Quest complete!${q.gold ? ` +${q.gold} gold.` : ""}${q.item ? ` ${ITEMS[q.item].name} for ${p.name}.` : ""}`); broadcast(room);
+  });
+  // Shop between rooms.
+  socket.on("buy", item => {
+    const room = rooms.get(socket.data.roomCode); const p = room?.players[socket.id];
+    const def = SHOP_ITEMS[item];
+    if (!room || !p || !(room.shop || room.scene === "hub") || !def) return;
+    if (item !== "heal" && (p.up[item] || 0) >= def.max) return;
+    if (room.gold < def.cost) return;
+    room.gold -= def.cost;
+    if (item === "heal") Object.values(room.players).forEach(t => { t.hp = cap(t); t.alive = true; });
+    else { p.up[item] = (p.up[item] || 0) + 1; if (item === "hp") p.hp = Math.min(cap(p), p.hp + 1); }
+    fx(room, "buy", { id: p.id });
+    broadcast(room);
+  });
+  // Pause: either hero can freeze the run for both. Timers are shifted on resume so nothing "catches up".
+  socket.on("pause", () => {
+    const room = rooms.get(socket.data.roomCode); const me = room?.players[socket.id];
+    if (!room || !me || !room.started || room.finished || room.gameOver || room.shop) return;
+    const now = Date.now();
+    if (!room.paused) { room.paused = true; room.pausedAt = now; room.pausedBy = me.name; Object.values(room.players).forEach(p => { p.input = { up: false, down: false, left: false, right: false }; }); notice(room, `${me.name} paused the game.`); }
+    else { shiftTimers(room, now - room.pausedAt); room.paused = false; room.pausedBy = ""; notice(room, "Back in the fight!"); }
+    broadcast(room);
+  });
+  // Rematch: when every hero in the room asks, restart the run with the same team and difficulty.
+  socket.on("retry", () => {
+    const room = rooms.get(socket.data.roomCode);
+    if (!room || !room.players[socket.id] || !room.gameOver || room.finished || (room.stage < 1 && !room.story)) return;
+    room.retry.add(socket.id); botsAgree(room, room.retry);
+    if (Object.keys(room.players).every(id => room.retry.has(id))) { retryRoom(room); fx(room, "stage", { stage: room.stage }); notice(room, "Retrying this room. This run will no longer be ranked."); }
+    else notice(room, "Waiting for your teammate to press RETRY ROOM.");
+    broadcast(room);
+  });
+  // Quick team signals on keys 1-4: help, over here, nice, watch out.
+  socket.on("emote", k => {
     const c = ctx(); if (!c) return; const { room, p, now } = c;
+    k = Number(k) | 0; if (k < 0 || k > 3 || now - (p.lastEmote || 0) < 900) return; p.lastEmote = now;
+    fx(room, "emote", { id: p.id, k, x: p.x, y: p.y });
+  });
+  socket.on("rematch", () => {
+    const room = rooms.get(socket.data.roomCode);
+    if (!room || !room.players[socket.id] || !(room.finished || room.gameOver)) return;
+    room.rematch.add(socket.id); botsAgree(room, room.rematch);
+    if (room.story && Object.keys(room.players).every(id => room.rematch.has(id))) { toHub(room); return broadcast(room); }
+    if (Object.keys(room.players).every(id => room.rematch.has(id))) {
+      resetRoom(room); startRun(room, 2200);
+      fx(room, "stage", { stage: 0 });
+      notice(room, "New run! Good luck.");
+    } else notice(room, "Waiting for your teammate to press PLAY AGAIN.");
+    broadcast(room);
+  });
+  socket.on("ready", () => {
+    const room = rooms.get(socket.data.roomCode);
+    if (!room || !room.shop || !room.players[socket.id]) return;
+    room.shop.ready.add(socket.id);
+    broadcast(room);
+  });
+
+  socket.on("disconnect", () => {
+    const code = socket.data.roomCode;
+    const room = rooms.get(code);
+    if (!room) return;
+    delete room.players[socket.id];
+    if (room.shop) room.shop.ready.delete(socket.id);
+    if (humansOf(room).length === 0) { removeBots(room); }
+    notice(room, "A player disconnected. The room is waiting for them to reconnect or for a new game.");
+    if (Object.keys(room.players).length === 0) rooms.delete(code);
+    else broadcast(room);
+  });
+});
+
+/* ------------------------------------------------------------------ game logic */
+// Hero actions live here (not inside the socket closure) so the CPU partner can use exactly the same code as a human.
+function doAttack(room, p, now) {
     const knight = p.cls === "knight", gs = gearStats(p);
     if (now < p.nextAttackAt) return;
     // 4-hit chain: slash, backslash, whirlwind spin, overhead ground pound (kinds 0,1,4,2). A dash-attack is a lunge thrust (kind 3).
@@ -458,11 +564,9 @@ io.on("connection", socket => {
       if (along >= -20 && along < 100 && side < 50) openChest(room, ch, p);
     });
     broadcast(room);
-  });
+}
 
-  // Secondary: bard riff (stun cone) or knight shield bash (short stun + knockback).
-  socket.on("note", () => {
-    const c = ctx(); if (!c) return; const { room, p, now } = c;
+function doNote(room, p, now) {
     const cd = NOTE_COOLDOWN * cdm(p) * (p.cls === "knight" ? 0.85 : 1);
     if (now - p.lastNote < cd) return;
     p.lastNote = now; p.noteUntil = now + 600;
@@ -483,11 +587,9 @@ io.on("connection", socket => {
       fx(room, "stun", { x: e.x, y: e.y });
     });
     broadcast(room);
-  });
+}
 
-  // Special: bard healing song (heals nearby heroes) or knight guard (brief immunity).
-  socket.on("special", () => {
-    const c = ctx(); if (!c) return; const { room, p, now } = c;
+function doSpecial(room, p, now) {
     if (now - p.lastSpecial < SPECIAL_COOLDOWN * cdm(p)) return;
     p.lastSpecial = now;
     if (p.cls === "knight") {
@@ -500,108 +602,17 @@ io.on("connection", socket => {
       });
     }
     broadcast(room);
-  });
+}
 
-  socket.on("dash", () => {
-    const c = ctx(); if (!c) return; const { room, p, now } = c;
+function doDash(room, p, now) {
     if (now - p.lastDash < DASH_COOLDOWN * cdm(p)) return;
     let dx = (p.input.right ? 1 : 0) - (p.input.left ? 1 : 0);
     let dy = (p.input.down ? 1 : 0) - (p.input.up ? 1 : 0);
     if (!dx && !dy) [dx, dy] = DIRS[p.facing] || [1, 0];
     p.dashDir = [dx, dy]; p.lastDash = now; p.dashUntil = now + DASH_MS;
     fx(room, "dash", { id: p.id, x: p.x, y: p.y });
-  });
+}
 
-  socket.on("equip", id => {
-    const room = rooms.get(socket.data.roomCode); const p = room?.players[socket.id]; const it = ITEMS[id];
-    if (!room || !p || !it || !p.inv.includes(id)) return;
-    p.inv.splice(p.inv.indexOf(id), 1);
-    const old = p.equip[it.slot]; if (old) p.inv.push(old);
-    p.equip[it.slot] = id; p.hp = Math.min(p.hp, cap(p));
-    fx(room, "equipped", { id: p.id }); broadcast(room);
-  });
-  socket.on("unequip", slot => {
-    const room = rooms.get(socket.data.roomCode); const p = room?.players[socket.id];
-    if (!room || !p || !p.equip || !p.equip[slot]) return;
-    p.inv.push(p.equip[slot]); p.equip[slot] = null; p.hp = Math.min(p.hp, cap(p));
-    broadcast(room);
-  });
-
-  socket.on("claim", id => {
-    const room = rooms.get(socket.data.roomCode); const p = room?.players[socket.id]; const q = QUESTS[id];
-    if (!room || !p || !room.story || room.scene !== "hub" || !q || room.story.claimed.has(id) || (room.story.q[q.kind] || 0) < q.n) return;
-    room.story.claimed.add(id); if (q.gold) room.gold += q.gold; if (q.item) giveItem(room, p, q.item);
-    bump(stats, "questsDone"); notice(room, `Quest complete!${q.gold ? ` +${q.gold} gold.` : ""}${q.item ? ` ${ITEMS[q.item].name} for ${p.name}.` : ""}`); broadcast(room);
-  });
-  // Shop between rooms.
-  socket.on("buy", item => {
-    const room = rooms.get(socket.data.roomCode); const p = room?.players[socket.id];
-    const def = SHOP_ITEMS[item];
-    if (!room || !p || !(room.shop || room.scene === "hub") || !def) return;
-    if (item !== "heal" && (p.up[item] || 0) >= def.max) return;
-    if (room.gold < def.cost) return;
-    room.gold -= def.cost;
-    if (item === "heal") Object.values(room.players).forEach(t => { t.hp = cap(t); t.alive = true; });
-    else { p.up[item] = (p.up[item] || 0) + 1; if (item === "hp") p.hp = Math.min(cap(p), p.hp + 1); }
-    fx(room, "buy", { id: p.id });
-    broadcast(room);
-  });
-  // Pause: either hero can freeze the run for both. Timers are shifted on resume so nothing "catches up".
-  socket.on("pause", () => {
-    const room = rooms.get(socket.data.roomCode); const me = room?.players[socket.id];
-    if (!room || !me || !room.started || room.finished || room.gameOver || room.shop) return;
-    const now = Date.now();
-    if (!room.paused) { room.paused = true; room.pausedAt = now; room.pausedBy = me.name; Object.values(room.players).forEach(p => { p.input = { up: false, down: false, left: false, right: false }; }); notice(room, `${me.name} paused the game.`); }
-    else { shiftTimers(room, now - room.pausedAt); room.paused = false; room.pausedBy = ""; notice(room, "Back in the fight!"); }
-    broadcast(room);
-  });
-  // Rematch: when every hero in the room asks, restart the run with the same team and difficulty.
-  socket.on("retry", () => {
-    const room = rooms.get(socket.data.roomCode);
-    if (!room || !room.players[socket.id] || !room.gameOver || room.finished || (room.stage < 1 && !room.story)) return;
-    room.retry.add(socket.id);
-    if (Object.keys(room.players).every(id => room.retry.has(id))) { retryRoom(room); fx(room, "stage", { stage: room.stage }); notice(room, "Retrying this room. This run will no longer be ranked."); }
-    else notice(room, "Waiting for your teammate to press RETRY ROOM.");
-    broadcast(room);
-  });
-  // Quick team signals on keys 1-4: help, over here, nice, watch out.
-  socket.on("emote", k => {
-    const c = ctx(); if (!c) return; const { room, p, now } = c;
-    k = Number(k) | 0; if (k < 0 || k > 3 || now - (p.lastEmote || 0) < 900) return; p.lastEmote = now;
-    fx(room, "emote", { id: p.id, k, x: p.x, y: p.y });
-  });
-  socket.on("rematch", () => {
-    const room = rooms.get(socket.data.roomCode);
-    if (!room || !room.players[socket.id] || !(room.finished || room.gameOver)) return;
-    room.rematch.add(socket.id);
-    if (room.story && Object.keys(room.players).every(id => room.rematch.has(id))) { toHub(room); return broadcast(room); }
-    if (Object.keys(room.players).every(id => room.rematch.has(id))) {
-      resetRoom(room); startRun(room, 2200);
-      fx(room, "stage", { stage: 0 });
-      notice(room, "New run! Good luck.");
-    } else notice(room, "Waiting for your teammate to press PLAY AGAIN.");
-    broadcast(room);
-  });
-  socket.on("ready", () => {
-    const room = rooms.get(socket.data.roomCode);
-    if (!room || !room.shop || !room.players[socket.id]) return;
-    room.shop.ready.add(socket.id);
-    broadcast(room);
-  });
-
-  socket.on("disconnect", () => {
-    const code = socket.data.roomCode;
-    const room = rooms.get(code);
-    if (!room) return;
-    delete room.players[socket.id];
-    if (room.shop) room.shop.ready.delete(socket.id);
-    notice(room, "A player disconnected. The room is waiting for them to reconnect or for a new game.");
-    if (Object.keys(room.players).length === 0) rooms.delete(code);
-    else broadcast(room);
-  });
-});
-
-/* ------------------------------------------------------------------ game logic */
 function openChest(room, c, p) {
   c.open = true;
   if (p) p.stats.chests++;
@@ -664,6 +675,121 @@ function fireTrait(room, e, target) {
   fx(room, "bossfire", { x: e.x, y: e.y });
 }
 
+/* ------------------------------------------------------------------ CPU partner
+   One-player runs get a computer hero on your side, so the game is always played with two characters.
+   It plays the opposite class and uses the very same attack, riff, special and dash code as a human. */
+const BOT_NAMES = { bard: "Wren (CPU)", knight: "Brin (CPU)" };
+const humansOf = room => Object.values(room.players).filter(p => !p.isBot);
+function addBot(room) {
+  if (Object.values(room.players).some(p => p.isBot)) return null;
+  const human = humansOf(room)[0]; if (!human) return null;
+  const cls = human.cls === "knight" ? "bard" : "knight", slot = human.slot === 0 ? 1 : 0;
+  const bot = newPlayer(room, "cpu-" + room.code, BOT_NAMES[cls], cls, slot);
+  bot.isBot = true; bot.x = clampX(room, human.x + (slot ? 55 : -55)); bot.y = human.y;
+  room.players[bot.id] = bot;
+  return bot;
+}
+function removeBots(room) { for (const id of Object.keys(room.players)) if (room.players[id].isBot) delete room.players[id]; }
+function botsAgree(room, set) { for (const p of Object.values(room.players)) if (p.isBot) set.add(p.id); }
+
+function botThink(room, b, now) {
+  if (now < (b.thinkAt || 0) && b.alive) return;                 // a human-ish reaction time: decide about every 0.1 to 0.2s, keep the last move in between
+  b.thinkAt = now + 100 + Math.random() * 100;
+  const inp = { up: false, down: false, left: false, right: false };
+  b.input = inp;
+  if (!b.alive || room.paused || room.finished || room.gameOver || room.shop) return;
+  const mates = humansOf(room), mate = mates.find(m => m.alive) || mates[0];
+  const knight = b.cls === "knight", D = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+  const move = (tx, ty, tol = 12) => {
+    const dx = tx - b.x, dy = ty - b.y;
+    if (Math.abs(dx) > tol) inp[dx > 0 ? "right" : "left"] = true;
+    if (Math.abs(dy) > tol) inp[dy > 0 ? "down" : "up"] = true;
+    return Math.hypot(dx, dy);
+  };
+  const away = (fx0, fy0) => {                                   // step directly away from a point
+    const dx = b.x - fx0, dy = b.y - fy0;
+    if (Math.abs(dx) > 6 || Math.abs(dy) < 6) inp[dx >= 0 ? "right" : "left"] = true;
+    if (Math.abs(dy) > 6 || Math.abs(dx) < 6) inp[dy >= 0 ? "down" : "up"] = true;
+  };
+  const dashReady = now - b.lastDash >= DASH_COOLDOWN * cdm(b), noteReady = now - b.lastNote >= NOTE_COOLDOWN * cdm(b) * (knight ? 0.85 : 1), specReady = now - b.lastSpecial >= SPECIAL_COOLDOWN * cdm(b);
+
+  // wear the best gear we carry
+  for (const id of b.inv.slice()) {
+    const it = ITEMS[id], cur = ITEMS[b.equip[it.slot]];
+    if (!cur || it.rarity > cur.rarity) { b.inv.splice(b.inv.indexOf(id), 1); if (cur) b.inv.push(b.equip[it.slot]); b.equip[it.slot] = id; fx(room, "equipped", { id: b.id }); }
+  }
+
+  // Village: shadow the player, and stand in the same gate when they do
+  if (room.scene === "hub") {
+    if (!mate) return;
+    const gate = REGION_IDS.map(id => REGIONS[id]).find(g => Math.abs(mate.x - g.gx) < 56 && mate.y < 112);
+    if (gate) move(gate.gx, 80, 8); else move(mate.x + (b.slot ? 44 : -44), mate.y + 18, 40);
+    if (mate && D(b.x, b.y, mate.x, mate.y) > 420 && dashReady) doDash(room, b, now);
+    return;
+  }
+
+  const foes = room.enemies.filter(e => e.alive && now >= e.activeAt);
+  // 1. get out of the way of telegraphed hits and incoming shots
+  const threat = foes.find(e => e.windupUntil > now && e.windupTarget === b.id && D(e.x, e.y, b.x, b.y) < (e.kind === "boss" ? 150 : 95) && !defOf(e).ranged);
+  if (threat && now - b.lastHit > 300) { away(threat.x, threat.y); if (dashReady && D(threat.x, threat.y, b.x, b.y) < 80) doDash(room, b, now); return; }
+  for (const sh of room.shots) {
+    const rx = b.x - sh.x, ry = b.y - sh.y, dist = Math.hypot(rx, ry);
+    if (dist > 120 || rx * sh.vx + ry * sh.vy <= 0) continue;
+    const cross = rx * sh.vy - ry * sh.vx, nx = -sh.vy, ny = sh.vx, n = Math.hypot(nx, ny) || 1, sgn = cross >= 0 ? -1 : 1;
+    const ux = nx / n * sgn, uy = ny / n * sgn;
+    if (Math.abs(ux) > 0.3) inp[ux > 0 ? "right" : "left"] = true;
+    if (Math.abs(uy) > 0.3) inp[uy > 0 ? "down" : "up"] = true;
+    if (dist < 55 && dashReady) doDash(room, b, now);
+    return;
+  }
+
+  // 2. pick up a fallen friend
+  if (mate && !mate.alive) { if (move(mate.x, mate.y, 16) < 40) return; return; }
+
+  // 3. support: healing song / guard
+  if (!knight && specReady && mate && D(b.x, b.y, mate.x, mate.y) < 170 && (mate.hp <= cap(mate) - 2 || b.hp <= cap(b) - 2) && (foes.length || mate.hp < cap(mate))) { doSpecial(room, b, now); }
+  if (knight && specReady && foes.some(e => D(e.x, e.y, b.x, b.y) < 90) && b.hp <= 3) { doSpecial(room, b, now); }
+
+  // 4. fight
+  const reach = (knight ? 116 : 96) + gearStats(b).reach, width = knight ? 64 : 48;
+  if (foes.length) {
+    const score = e => D(e.x, e.y, b.x, b.y) + (mate ? 0.35 * D(e.x, e.y, mate.x, mate.y) : 0) - ((e.kind === "archer" || e.kind === "hexer") ? 70 : 0) - (e.keeper && !room.key ? 50 : 0);
+    const t = foes.reduce((a, e) => (score(e) < score(a) ? e : a), foes[0]);
+    const vx = t.x - b.x, vy = t.y - b.y, horiz = Math.abs(vx) >= Math.abs(vy);
+    const dir = horiz ? (vx > 0 ? "right" : "left") : (vy > 0 ? "down" : "up");
+    const along = horiz ? Math.abs(vx) : Math.abs(vy), side = horiz ? Math.abs(vy) : Math.abs(vx), big = t.kind === "boss" ? 40 : 0;
+    // line up across, then close the gap
+    if (side > width * 0.3) inp[horiz ? (vy > 0 ? "down" : "up") : (vx > 0 ? "right" : "left")] = true;
+    if (along > reach * 0.55) inp[horiz ? (vx > 0 ? "right" : "left") : (vy > 0 ? "down" : "up")] = true;
+    else if (along < reach * 0.3) inp[horiz ? (vx > 0 ? "left" : "right") : (vy > 0 ? "up" : "down")] = true;
+    b.facing = dir;
+    const inCone = along < reach * 0.9 + big && side < width * 0.6 + big;
+    const close = foes.filter(e => D(e.x, e.y, b.x, b.y) < 110);
+    if (inCone && noteReady && (close.length >= 2 || t.windupUntil > now || t.kind === "boss" || t.elite)) doNote(room, b, now);
+    else if (inCone || close.length >= 2) doAttack(room, b, now);
+    return;
+  }
+
+  // 5. nothing to fight: hearts, key, chests, then the exit
+  const needHeart = b.hp < cap(b) && (!mate || b.hp <= mate.hp || !mate.alive);
+  const heart = needHeart && room.pickups.reduce((a, p) => (!a || D(p.x, p.y, b.x, b.y) < D(a.x, a.y, b.x, b.y) ? p : a), null);
+  if (heart && D(heart.x, heart.y, b.x, b.y) < 260) { move(heart.x, heart.y, 10); return; }
+  if (room.keyDrop) { move(room.keyDrop.x, room.keyDrop.y, 10); return; }
+  const chest = room.chests.filter(c => !c.open).reduce((a, c) => (!a || D(c.x, c.y, b.x, b.y) < D(a.x, a.y, b.x, b.y) ? c : a), null);
+  if (chest) {
+    const vx = chest.x - b.x, vy = chest.y - b.y, horiz = Math.abs(vx) >= Math.abs(vy);
+    const along = horiz ? Math.abs(vx) : Math.abs(vy), side = horiz ? Math.abs(vy) : Math.abs(vx);
+    if (side > 18) inp[horiz ? (vy > 0 ? "down" : "up") : (vx > 0 ? "right" : "left")] = true;
+    if (along > 56) inp[horiz ? (vx > 0 ? "right" : "left") : (vy > 0 ? "down" : "up")] = true;
+    b.facing = horiz ? (vx > 0 ? "right" : "left") : (vy > 0 ? "down" : "up");
+    if (along < 90 && side < 40) doAttack(room, b, now);
+    return;
+  }
+  const open = room.enemies.every(e => !e.alive) && (room.stage === 0 || room.key);
+  if (open) { move(745, 245 + (b.slot ? 28 : -28), 10); return; }
+  if (mate) move(mate.x + (b.slot ? 50 : -50), mate.y + 20, 55);
+}
+
 function tick() {
   const now = Date.now(), dt = 0.05;
   for (const room of rooms.values()) {
@@ -673,6 +799,7 @@ function tick() {
 
     // Shop phase: nothing moves; wait for ready or timeout.
     if (room.shop) {
+      all.forEach(p => { if (p.isBot) room.shop.ready.add(p.id); });
       const everyone = all.every(p => room.shop.ready.has(p.id));
       if (everyone || now > room.shop.until) {
         room.shop = null; room.stage++; initStage(room); room.cpGold = room.gold;
@@ -686,6 +813,7 @@ function tick() {
     let alive = all.filter(p => p.alive);
     if (alive.length === 0) { room.gameOver = true; bump(stats.wipes, LAY(room).name); if (room.lastHitBy) bump(stats.killers, room.lastHitBy); fx(room, "gameover"); broadcast(room); continue; }
 
+    for (const p of alive) if (p.isBot) botThink(room, p, now);
     for (const p of alive) {
       const dashing = now < p.dashUntil;
       let dx = (p.input.right ? 1 : 0) - (p.input.left ? 1 : 0);
@@ -860,5 +988,5 @@ setInterval(tick, 50);
 if (require.main === module) {
   server.listen(PORT, () => console.log(`Riff & Shield listening on ${PORT}`));
 } else {
-  module.exports = { retryRoom, server, io, rooms, MOB, MAX_HP, roomLayouts, REGIONS, QUESTS, toHub, enterRegion, initStage, startRun, ITEMS, giveItem, killEnemy, resetRoom, DIFFS };   // for automated tests
+  module.exports = { makeRoom, addBot, newPlayer, tick, retryRoom, server, io, rooms, MOB, MAX_HP, roomLayouts, REGIONS, QUESTS, toHub, enterRegion, initStage, startRun, ITEMS, giveItem, killEnemy, resetRoom, DIFFS };   // for automated tests
 }
