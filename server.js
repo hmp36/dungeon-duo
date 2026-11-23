@@ -524,7 +524,7 @@ function doAttack(room, p, now) {
     const [dx, dy] = DIRS[p.facing] || [1, 0];
     const crit = rand(room) * 100 < gs.crit;
     const reach = (knight ? 116 : 96) + gs.reach + (pound ? 26 : 0) + (lunge ? 34 : 0), width = (knight ? 64 : 48) + (pound ? 18 : 0);
-    const dmg = 2 + (p.up.dmg || 0) + gs.dmg + (pound ? 2 : 0) + (lunge ? 1 : 0) + (crit ? 2 : 0);
+    const dmg = Math.max(1, 2 + (p.up.dmg || 0) + gs.dmg + (pound ? 2 : 0) + (lunge ? 1 : 0) + (crit ? 2 : 0) - (p.isBot ? 1 : 0));
     const kb = pound ? 70 : 40;
     if (p.cls) { /* movement burst on swing */ const step = lunge ? 0 : spin ? 0 : pound ? 6 : 14; p.x = clampX(room, p.x + dx * step); p.y = clampY(room, p.y + dy * step); }
     const hitSet = new Set();
@@ -693,8 +693,8 @@ function removeBots(room) { for (const id of Object.keys(room.players)) if (room
 function botsAgree(room, set) { for (const p of Object.values(room.players)) if (p.isBot) set.add(p.id); }
 
 function botThink(room, b, now) {
-  if (now < (b.thinkAt || 0) && b.alive) return;                 // a human-ish reaction time: decide about every 0.1 to 0.2s, keep the last move in between
-  b.thinkAt = now + 100 + Math.random() * 100;
+  if (now < (b.thinkAt || 0) && b.alive) return;                 // a slow, human-ish reaction time: decide about every 0.3 to 0.6s, keep the last move in between
+  b.thinkAt = now + 280 + Math.random() * 280;
   const inp = { up: false, down: false, left: false, right: false };
   b.input = inp;
   if (!b.alive || room.paused || room.finished || room.gameOver || room.shop) return;
@@ -728,7 +728,8 @@ function botThink(room, b, now) {
     return;
   }
 
-  const foes = room.enemies.filter(e => e.alive && now >= e.activeAt);
+  const awake = room.enemies.filter(e => e.alive && now >= e.activeAt);
+  const foes = mate ? awake.filter(e => D(e.x, e.y, mate.x, mate.y) < 300 || D(e.x, e.y, b.x, b.y) < 130) : awake;   // leash: the partner helps with what is near you, it does not clear the room alone
   // 1. get out of the way of telegraphed hits and incoming shots
   const threat = foes.find(e => e.windupUntil > now && e.windupTarget === b.id && D(e.x, e.y, b.x, b.y) < (e.kind === "boss" ? 150 : 95) && !defOf(e).ranged);
   if (threat && now - b.lastHit > 300) { away(threat.x, threat.y); if (dashReady && D(threat.x, threat.y, b.x, b.y) < 80) doDash(room, b, now); return; }
@@ -753,7 +754,7 @@ function botThink(room, b, now) {
   // 4. fight
   const reach = (knight ? 116 : 96) + gearStats(b).reach, width = knight ? 64 : 48;
   if (foes.length) {
-    const score = e => D(e.x, e.y, b.x, b.y) + (mate ? 0.35 * D(e.x, e.y, mate.x, mate.y) : 0) - ((e.kind === "archer" || e.kind === "hexer") ? 70 : 0) - (e.keeper && !room.key ? 50 : 0);
+    const score = e => D(e.x, e.y, b.x, b.y) * 0.4 + (mate ? D(e.x, e.y, mate.x, mate.y) : 0);
     const t = foes.reduce((a, e) => (score(e) < score(a) ? e : a), foes[0]);
     const vx = t.x - b.x, vy = t.y - b.y, horiz = Math.abs(vx) >= Math.abs(vy);
     const dir = horiz ? (vx > 0 ? "right" : "left") : (vy > 0 ? "down" : "up");
@@ -765,28 +766,18 @@ function botThink(room, b, now) {
     b.facing = dir;
     const inCone = along < reach * 0.9 + big && side < width * 0.6 + big;
     const close = foes.filter(e => D(e.x, e.y, b.x, b.y) < 110);
-    if (inCone && noteReady && (close.length >= 2 || t.windupUntil > now || t.kind === "boss" || t.elite)) doNote(room, b, now);
-    else if (inCone || close.length >= 2) doAttack(room, b, now);
+    if (now < (b.swingAt || 0)) return;                      // takes a breath between swings
+    if (inCone && noteReady && Math.random() < 0.35 && (close.length >= 2 || t.windupUntil > now || t.kind === "boss" || t.elite)) { b.swingAt = now + 700; doNote(room, b, now); }
+    else if (inCone) { b.swingAt = now + 650 + Math.random() * 450; doAttack(room, b, now); }
     return;
   }
 
-  // 5. nothing to fight: hearts, key, chests, then the exit
+  // 5. nothing to fight: the loot is yours. It only grabs a heart when hurt and one is close, then heads for the exit with you.
   const needHeart = b.hp < cap(b) && (!mate || b.hp <= mate.hp || !mate.alive);
   const heart = needHeart && room.pickups.reduce((a, p) => (!a || D(p.x, p.y, b.x, b.y) < D(a.x, a.y, b.x, b.y) ? p : a), null);
-  if (heart && D(heart.x, heart.y, b.x, b.y) < 260) { move(heart.x, heart.y, 10); return; }
-  if (room.keyDrop) { move(room.keyDrop.x, room.keyDrop.y, 10); return; }
-  const chest = room.chests.filter(c => !c.open).reduce((a, c) => (!a || D(c.x, c.y, b.x, b.y) < D(a.x, a.y, b.x, b.y) ? c : a), null);
-  if (chest) {
-    const vx = chest.x - b.x, vy = chest.y - b.y, horiz = Math.abs(vx) >= Math.abs(vy);
-    const along = horiz ? Math.abs(vx) : Math.abs(vy), side = horiz ? Math.abs(vy) : Math.abs(vx);
-    if (side > 18) inp[horiz ? (vy > 0 ? "down" : "up") : (vx > 0 ? "right" : "left")] = true;
-    if (along > 56) inp[horiz ? (vx > 0 ? "right" : "left") : (vy > 0 ? "down" : "up")] = true;
-    b.facing = horiz ? (vx > 0 ? "right" : "left") : (vy > 0 ? "down" : "up");
-    if (along < 90 && side < 40) doAttack(room, b, now);
-    return;
-  }
+  if (heart && D(heart.x, heart.y, b.x, b.y) < 120) { move(heart.x, heart.y, 10); return; }
   const open = room.enemies.every(e => !e.alive) && (room.stage === 0 || room.key);
-  if (open) { move(745, 245 + (b.slot ? 28 : -28), 10); return; }
+  if (open && (!mate || mate.x > 520 || !mate.alive)) { move(745, 245 + (b.slot ? 28 : -28), 10); return; }
   if (mate) move(mate.x + (b.slot ? 50 : -50), mate.y + 20, 55);
 }
 
