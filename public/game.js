@@ -109,7 +109,22 @@ function loadBoard() {
 }
 loadBoard();
 $("joinBtn").onclick = () => { audio(); socket.emit("joinRoom", { name: $("playerName").value.trim() || "Hero", cls: myCls, code: $("roomCode").value }, enterRoom); };
-$("copyBtn").onclick = () => navigator.clipboard?.writeText(roomCode).then(() => $("copyBtn").textContent = "COPIED");
+// Invite links: ?room=CODE drops a friend straight onto the join screen with the code filled in.
+const inviteLink = () => location.origin + "/?room=" + roomCode;
+$("copyBtn").onclick = () => {
+  const link = inviteLink(), msg = "Join me in Riff & Shield, a co-op dungeon crawler. Room code " + roomCode + ":";
+  if (navigator.share && matchMedia("(pointer:coarse)").matches) { navigator.share({ title: "Riff & Shield", text: msg, url: link }).catch(() => {}); return; }
+  const done = () => { $("copyBtn").textContent = "LINK COPIED"; setTimeout(() => { $("copyBtn").textContent = "INVITE LINK"; }, 2000); };
+  (navigator.clipboard ? navigator.clipboard.writeText(link).then(done) : Promise.reject()).catch(() => { prompt("Copy this invite link:", link); });
+};
+(function applyInvite() {
+  let code = ""; try { code = (new URLSearchParams(location.search).get("room") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6); } catch (e) {}
+  if (!code) return;
+  $("roomCode").value = code; $("joinBtn").textContent = "JOIN ROOM " + code;
+  $("joinBtn").classList.replace("secondary", "primary"); $("createBtn").classList.replace("primary", "secondary");
+  $("title").classList.add("hidden"); lobby.classList.remove("hidden");
+  showError("A friend invited you. Pick a hero and press JOIN.");
+})();
 $("againBtn").onclick = () => location.reload();
 let iVoted = false;
 $("rematchBtn").onclick = () => { iVoted = true; $("rematchBtn").disabled = true; socket.emit("rematch"); };
