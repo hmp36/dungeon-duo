@@ -8,17 +8,17 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Riff &amp; Shield">
   <meta property="og:title" content="Riff &amp; Shield - a co-op dungeon crawler for two">
-  <meta property="og:description" content="Pick a Troubadour or a Knight, fight through five rooms, and take down the Dragon of Debt together. Plays in your browser, works on phones.">
+  <meta property="og:description" content="Pick a Troubadour or a Knight, and take down the Dragon of Debt together. Plays in your browser.">
   <meta property="og:url" content="https://dungeon-duo-ykqa.onrender.com/">
   <meta property="og:image" content="https://dungeon-duo-ykqa.onrender.com/img/og.jpg">
   <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="The Knight faces the Dragon of Debt in Riff &amp; Shield">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Riff &amp; Shield - a co-op dungeon crawler for two">
-  <meta name="twitter:description" content="Two heroes, five rooms, one dragon. Plays in your browser.">
+  <meta name="twitter:description" content="Two heroes, one dragon. Plays in your browser.">
   <meta name="twitter:image" content="https://dungeon-duo-ykqa.onrender.com/img/og.jpg">
   <meta name="theme-color" content="#10131b">
-  <link rel="stylesheet" href="style.css?v=24">
+  <link rel="stylesheet" href="style.css?v=25">
 </head>
 <body>
   <div id="conn" class="conn hidden" role="status"></div>
@@ -26,9 +26,9 @@
     <header class="topbar"><div class="brand">⚔ RIFF <span>&amp; SHIELD</span></div><div class="tag">TWO HEROES. ONE WAY OUT.</div></header>
     <section id="title" class="title">
       <div class="slides"><img src="img/entrance.jpg" alt="Entrance"><img src="img/crypt.jpg" alt="Crypt"><img src="img/treasure.jpg" alt="Treasure Chamber"><img src="img/boss.jpg" alt="Dragon of Debt"></div>
-      <div class="titlecard"><div class="eyebrow">A CO-OP PIXEL ADVENTURE FOR TWO</div><h1>RIFF <em>&amp; SHIELD</em></h1><p>Pick a Troubadour or a Knight. Fight through five rooms, steal the key from the Keeper, and take down the Dragon of Debt together.</p>
+      <div class="titlecard"><div class="eyebrow">A CO-OP PIXEL ADVENTURE FOR TWO</div><h1>RIFF <em>&amp; SHIELD</em></h1><p>Pick a Troubadour or a Knight. Steal the key from the Keeper and take down the Dragon of Debt together.</p>
         <div class="titlebtns"><button id="playBtn" class="primary">PLAY</button><button id="howBtn" class="secondary">HOW TO PLAY</button></div>
-        <div class="feat"><span>5 rooms</span><span>2 heroes</span><span>boss fight</span><span>daily dungeon</span><span>works on phones</span></div></div>
+        <div class="feat"><span>2 heroes</span></div></div>
     </section>
     <div id="howto" class="modal hidden"><div class="modalbox"><button id="howClose" class="secondary closebtn">CLOSE</button><h2>HOW TO PLAY</h2>
       <div class="how2"><div><h3>CONTROLS</h3><p><b>Move</b> WASD or arrows<br><b>Attack</b> Space<br><b>Ability</b> Q (riff stun or shield bash)<br><b>Special</b> R (heal song or guard)<br><b>Pause</b> P (either hero can pause for both)<br><b>Dash</b> Shift (brief invulnerability)<br>On a phone, use the on-screen buttons.</p>
@@ -37,7 +37,7 @@
       <h3>TIPS</h3><p>Pick a difficulty when you create a room: Easy has more hearts and softer monsters, Hard has fewer hearts and tougher ones (with a score bonus). Watch for the Iron Warden mini-boss in the Treasure Chamber. When a run ends, press PLAY AGAIN to go straight back in. Red rings mean a hit is coming. Stand next to a fallen friend to revive them. Hearts can lift you above your starting 5.</p></div>
       <div class="shots"><img src="img/entrance.jpg" alt=""><img src="img/crypt.jpg" alt=""><img src="img/treasure.jpg" alt=""><img src="img/boss.jpg" alt=""></div></div></div></div>
     <section id="lobby" class="panel lobby hidden">
-      <div class="intro"><div class="eyebrow">CO-OP PIXEL ADVENTURE</div><h1>Enter the dungeon.<br><em>Escape together.</em></h1><p>Team up with a friend, clear five rooms, beat the Keeper for the key in the Crypt, and get every surviving hero to the exit.</p><div id="boardBox" class="board"></div></div>
+      <div class="intro"><div class="eyebrow">CO-OP PIXEL ADVENTURE</div><h1>Enter the dungeon.<br><em>Escape together.</em></h1><p>Team up with a friend, beat the Keeper for the key in the Crypt, and get every surviving hero to the exit.</p><div id="boardBox" class="board"></div></div>
       <div class="joinbox"><label for="playerName">HERO NAME</label><input id="playerName" maxlength="18" placeholder="Your name" value="Hero">
         <label>CHOOSE YOUR HERO</label>
         <div class="clspick"><button type="button" data-cls="bard" class="cls on"><canvas class="pv" data-cls="bard" width="300" height="375"></canvas><span>🎸 TROUBADOUR</span></button><button type="button" data-cls="knight" class="cls"><canvas class="pv" data-cls="knight" width="300" height="375"></canvas><span>🛡 KNIGHT</span></button></div>
@@ -79,6 +79,6 @@
     </section>
     <footer>Built for brave friends • Stay together, watch your hearts.</footer>
   </main>
-  <script src="/socket.io/socket.io.js"></script><script src="game.js?v=24"></script><script src="story.js?v=24"></script>
+  <script src="/socket.io/socket.io.js"></script><script src="game.js?v=25"></script><script src="story.js?v=25"></script>
 </body>
 </html>
